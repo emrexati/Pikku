@@ -1,0 +1,33 @@
+name: iOS IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Derle (imzasız)
+        run: |
+          xcodebuild -project Sohbet.xcodeproj -scheme Sohbet -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+
+      - name: IPA paketle
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Sohbet.app Payload/
+          zip -qry Sohbet.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sohbet-ipa
+          path: Sohbet.ipa
