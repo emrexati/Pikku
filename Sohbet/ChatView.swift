@@ -17,14 +17,14 @@ struct ChatView: View {
     @State private var pickerItem: PhotosPickerItem?
     @FocusState private var focused: Bool
 
-    private var title: String { model.peerName.isEmpty ? "Sohbet" : model.peerName }
+    private var title: String { model.peerName.isEmpty ? "Pikku" : model.peerName }
 
     var body: some View {
         VStack(spacing: 0) {
             messageList
             inputBar
         }
-        .background(theme.wallpaper.ignoresSafeArea())
+        .background(WallpaperView(index: theme.wallpaperIndex).ignoresSafeArea())
         .overlay(alignment: .top) { banner }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.barBg, for: .navigationBar)

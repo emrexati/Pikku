@@ -85,7 +85,7 @@ struct LockView: View {
                     .foregroundColor(.white)
                     .frame(width: 90, height: 90)
                     .background(Circle().fill(theme.accent))
-                Text("Sohbet kilitli").font(.title2.bold())
+                Text("Pikku kilitli").font(.title2.bold())
                 Text("Devam etmek için Face ID veya cihaz şifreni kullan.")
                     .font(.callout)
                     .foregroundColor(.secondary)

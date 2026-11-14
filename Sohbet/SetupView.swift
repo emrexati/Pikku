@@ -23,7 +23,7 @@ struct SetupView: View {
                     .padding(.top, 48)
 
                 VStack(spacing: 6) {
-                    Text("Sohbet").font(.largeTitle.bold())
+                    Text("Pikku").font(.largeTitle.bold())
                     Text("Yalnızca ikiniz için. Mesajlar, dosyalar ve aramalar uçtan uca şifreli.")
                         .font(.callout)
                         .multilineTextAlignment(.center)

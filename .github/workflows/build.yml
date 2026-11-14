@@ -25,9 +25,9 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Sohbet.app Payload/
-          zip -qry Sohbet.ipa Payload
+          zip -qry Pikku.ipa Payload
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Sohbet-ipa
-          path: Sohbet.ipa
+          name: Pikku-ipa
+          path: Pikku.ipa

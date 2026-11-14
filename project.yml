@@ -19,8 +19,8 @@ targets:
     info:
       path: Sohbet/Info.plist
       properties:
-        CFBundleDisplayName: Sohbet
-        CFBundleName: Sohbet
+        CFBundleDisplayName: Pikku
+        CFBundleName: Pikku
         CFBundleExecutable: $(EXECUTABLE_NAME)
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundlePackageType: APPL
@@ -33,7 +33,7 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSCameraUsageDescription: Görüntülü görüşme için kamera gerekiyor.
         NSMicrophoneUsageDescription: Sesli ve görüntülü görüşme için mikrofon gerekiyor.
-        NSFaceIDUsageDescription: Sohbeti kilitlemek ve açmak için Face ID kullanılır.
+        NSFaceIDUsageDescription: Pikku'yu kilitlemek ve açmak için Face ID kullanılır.
         NSPhotoLibraryAddUsageDescription: Gelen fotoğraf ve videoları galerine kaydedebilmen için.
         ITSAppUsesNonExemptEncryption: false
     settings:

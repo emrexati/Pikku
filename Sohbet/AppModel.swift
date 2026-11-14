@@ -161,7 +161,7 @@ final class AppModel: ObservableObject {
             return
         }
         let ok = (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication,
-                                                localizedReason: "Sohbeti açmak için kimliğini doğrula")) ?? false
+                                                localizedReason: "Pikku'yu açmak için kimliğini doğrula")) ?? false
         if ok {
             locked = false
             scheduleRead()

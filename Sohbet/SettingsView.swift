@@ -23,6 +23,7 @@ struct SettingsView: View {
                     TextField("Adın", text: $c.myName)
                 }
                 privacySection
+                themesSection
                 appearanceSection
                 colorSection
                 codeSection
@@ -71,6 +72,36 @@ struct SettingsView: View {
         }
     }
 
+    private var themesSection: some View {
+        Section {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(Wallpapers.themed, id: \.self) { i in
+                    Button {
+                        theme.apply(themeAt: i)
+                    } label: {
+                        VStack(spacing: 6) {
+                            WallpaperView(index: i)
+                                .environment(\.colorScheme, Wallpapers.all[i].preset?.mode == 1 ? .light : .dark)
+                                .frame(height: 150)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14)
+                                    .stroke(theme.accent, lineWidth: theme.theme.wallpaper == i ? 3 : 0))
+                            Text(Wallpapers.all[i].name)
+                                .font(.footnote.weight(.medium))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 6)
+        } header: {
+            Text("Temalar")
+        } footer: {
+            Text("Tema; arka planı, vurgu rengini ve balon renklerini birlikte değiştirir. Sonra aşağıdan dilediğin rengi ayrıca düzenleyebilirsin.")
+        }
+    }
+
     private var appearanceSection: some View {
         Section("Görünüm") {
             Picker("Tema", selection: $theme.theme.mode) {
@@ -99,15 +130,14 @@ struct SettingsView: View {
                 Text("Arka plan")
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        ForEach(Array(Wallpapers.all.enumerated()), id: \.offset) { i, w in
+                        ForEach(Wallpapers.all.indices.filter { Wallpapers.all[$0].preset == nil }, id: \.self) { i in
                             VStack(spacing: 4) {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(LinearGradient(colors: [.dyn(w.light.0, w.dark.0), .dyn(w.light.1, w.dark.1)],
-                                                         startPoint: .top, endPoint: .bottom))
+                                WallpaperView(index: i)
                                     .frame(width: 54, height: 80)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                                     .overlay(RoundedRectangle(cornerRadius: 10)
                                         .stroke(theme.accent, lineWidth: theme.theme.wallpaper == i ? 3 : 0))
-                                Text(w.name).font(.caption2)
+                                Text(Wallpapers.all[i].name).font(.caption2)
                             }
                             .onTapGesture { theme.theme.wallpaper = i }
                         }
@@ -161,7 +191,7 @@ struct SettingsView: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(theme.wallpaper))
+        .background(WallpaperView(index: theme.wallpaperIndex).clipShape(RoundedRectangle(cornerRadius: 12)))
         .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
     }
 

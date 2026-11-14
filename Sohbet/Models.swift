@@ -78,10 +78,24 @@ struct ChatMessage: Codable, Identifiable, Equatable {
 
 // MARK: - Tema
 
+enum WallpaperStyle { case gradient, storybook, eventHorizon, science, space }
+
+/// Hazır tema: arka plan + renkleri birlikte uygular.
+struct ThemePreset {
+    let mode: Int
+    let accent: UInt32
+    let myBubble: UInt32
+    let myText: UInt32
+    let theirBubble: UInt32
+    let theirText: UInt32
+}
+
 struct Wallpaper {
     let name: String
     let light: (UInt32, UInt32)
     let dark: (UInt32, UInt32)
+    var style: WallpaperStyle = .gradient
+    var preset: ThemePreset? = nil
 }
 
 enum Wallpapers {
@@ -90,9 +104,26 @@ enum Wallpapers {
         Wallpaper(name: "Okyanus", light: (0x8EC5E8, 0xD3E9F5), dark: (0x0B1A2A, 0x10263B)),
         Wallpaper(name: "Gün batımı", light: (0xF2AE86, 0xF8DDC0), dark: (0x2A1515, 0x1A0F14)),
         Wallpaper(name: "Lavanta", light: (0xC3B5E8, 0xE6DEF6), dark: (0x1B1530, 0x120E22)),
-        Wallpaper(name: "Gri", light: (0xD5D8DC, 0xEEF0F2), dark: (0x1C1C1E, 0x121214))
+        Wallpaper(name: "Gri", light: (0xD5D8DC, 0xEEF0F2), dark: (0x1C1C1E, 0x121214)),
+        Wallpaper(name: "Masal Gezegeni", light: (0x24306A, 0xF4C9A2), dark: (0x10153A, 0x4A3A6A),
+                  style: .storybook,
+                  preset: ThemePreset(mode: 0, accent: 0xE9A23B, myBubble: 0xFFF1D6, myText: 0x3A2A10,
+                                      theirBubble: 0xFFFFFF, theirText: 0x1E2A5A)),
+        Wallpaper(name: "Olay Ufku", light: (0x05060A, 0x0B0D16), dark: (0x05060A, 0x0B0D16),
+                  style: .eventHorizon,
+                  preset: ThemePreset(mode: 2, accent: 0xF4A340, myBubble: 0x3A2814, myText: 0xFFE7B0,
+                                      theirBubble: 0x1A1C24, theirText: 0xE6E8EF)),
+        Wallpaper(name: "Laboratuvar", light: (0xE4F6F1, 0xF4FBF9), dark: (0x0C2226, 0x10292E),
+                  style: .science,
+                  preset: ThemePreset(mode: 1, accent: 0x1FA08A, myBubble: 0xD0F2EA, myText: 0x0D3B33,
+                                      theirBubble: 0xFFFFFF, theirText: 0x16302B)),
+        Wallpaper(name: "Uzay", light: (0x0B0F2E, 0x2A1550), dark: (0x0B0F2E, 0x2A1550),
+                  style: .space,
+                  preset: ThemePreset(mode: 2, accent: 0x8E7CFF, myBubble: 0x3B2C7A, myText: 0xF1EEFF,
+                                      theirBubble: 0x1B1F3B, theirText: 0xE4E6FF))
     ]
     static let accents: [UInt32] = [0x2AA3E6, 0x34A853, 0x8E5CF7, 0xF2994A, 0xE84D8A, 0xE5484D, 0x5C6B7A]
+    static var themed: [Int] { all.indices.filter { all[$0].preset != nil } }
 }
 
 struct Theme: Codable, Equatable {
@@ -133,10 +164,21 @@ final class ThemeStore: ObservableObject {
     var theirMeta: Color { theme.theirText.map { Color(UIColor(hex: $0)).opacity(0.6) } ?? .secondary }
     var font: Font { .system(size: theme.fontSize) }
 
-    var wallpaper: LinearGradient {
-        let w = Wallpapers.all[min(max(theme.wallpaper, 0), Wallpapers.all.count - 1)]
-        return LinearGradient(colors: [.dyn(w.light.0, w.dark.0), .dyn(w.light.1, w.dark.1)],
-                              startPoint: .top, endPoint: .bottom)
+    var wallpaperIndex: Int { min(max(theme.wallpaper, 0), Wallpapers.all.count - 1) }
+
+    func apply(themeAt i: Int) {
+        guard Wallpapers.all.indices.contains(i) else { return }
+        var t = theme
+        t.wallpaper = i
+        if let p = Wallpapers.all[i].preset {
+            t.mode = p.mode
+            t.accent = p.accent
+            t.myBubble = p.myBubble
+            t.myText = p.myText
+            t.theirBubble = p.theirBubble
+            t.theirText = p.theirText
+        }
+        theme = t
     }
 
     func resetColors() {

@@ -1,4 +1,4 @@
-# Sohbet — iki kişilik, Telegram tarzı, uçtan uca şifreli iOS uygulaması
+# Pikku — iki kişilik, Telegram tarzı, uçtan uca şifreli iOS uygulaması
 
 App Store gerekmez; .ipa dosyası olarak telefona yüklenir.
 
@@ -27,6 +27,7 @@ App Store gerekmez; .ipa dosyası olarak telefona yüklenir.
 - Kopyalanan kod 2 dakika sonra panodan silinir
 
 **Görünüm**
+- Hazır temalar: Masal Gezegeni, Olay Ufku, Laboratuvar, Uzay
 - Sistem / açık / koyu tema
 - Vurgu rengi, 5 arka plan
 - Kendi ve karşı tarafın balon rengi ve yazı rengi (renk seçiciyle)
@@ -36,13 +37,13 @@ App Store gerekmez; .ipa dosyası olarak telefona yüklenir.
 1. GitHub'da yeni bir repo aç (public olabilir; kodda gizli bilgi yok).
 2. Bu klasörün tüm içeriğini (gizli `.github` klasörü dahil) repoya yükle.
 3. **Actions** sekmesi → "iOS IPA" iş akışı çalışır (çalışmazsa "Run workflow").
-4. Bitince sayfanın altındaki **Sohbet-ipa** dosyasını indir, zip'i aç → `Sohbet.ipa`.
+4. Bitince sayfanın altındaki **Pikku-ipa** dosyasını indir, zip'i aç → `Pikku.ipa`.
 
 Mac'in varsa: `brew install xcodegen && xcodegen generate` → `Sohbet.xcodeproj`'yi Xcode'da aç → Signing'de Apple ID'ni seç → Run.
 
 ## 2) iPhone'a yükle (Sideloadly ile, Windows veya Mac)
 1. https://sideloadly.io adresinden Sideloadly'yi kur.
-2. iPhone'u bağla, `Sohbet.ipa`'yı sürükle, Apple ID'ni yaz, **Start**.
+2. iPhone'u bağla, `Pikku.ipa`'yı sürükle, Apple ID'ni yaz, **Start**.
 3. iPhone: Ayarlar → Gizlilik ve Güvenlik → **Geliştirici Modu**'nu aç.
 4. Ayarlar → Genel → **VPN ve Cihaz Yönetimi** → Apple ID'ne **Güven**.
 5. Karşı tarafın iPhone'una da aynı IPA'yı yükle.
