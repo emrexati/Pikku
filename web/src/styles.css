@@ -476,3 +476,7 @@ input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
 .pk-emoji .pk-meta { float: none; margin: 0; top: 0; padding: 3px 7px; border-radius: 9px; color: var(--color-text-primary) !important; background: var(--pk-bar); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 0 0 .5px var(--pk-hair); }
 .pk-ready .astryx-chat-message:has(.pk-emoji) { transform-origin: 50% 100%; }
 @starting-style { .pk-ready .astryx-chat-message:has(.pk-emoji) { transform: scale(.4) rotate(-12deg); } }
+
+/* Mesaj kutusunun üstündeki hazır "bulanık geçiş" katmanı son mesajı bulanıklaştırıyordu.
+   Kendi cam mesaj kutumuz olduğu için onu kapatıyoruz. */
+*:has(> .astryx-chat-layout-scroll-button) + * { display: none !important; }
