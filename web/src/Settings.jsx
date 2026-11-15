@@ -121,6 +121,7 @@ export function Settings({ isOpen, onClose }) {
             <div className="pk-pv pk-pv-theirs">Merhaba, nasılsın?</div>
             <div className="pk-pv pk-pv-mine">İyiyim, sen?</div>
           </div>
+          <ContrastWarning />
           <div className="pk-pad"><Button label="Varsayılan temaya dön" variant="secondary" width="100%" onClick={e => themeReveal(e, core.resetTheme)} /></div>
         </Group>
 
@@ -139,8 +140,8 @@ export function Settings({ isOpen, onClose }) {
           <div className="pk-row">
             <span className="pk-mono pk-code">{showCode ? S.config.code : '••••-••••-••••-••••'}</span>
             <div className="pk-inline">
-              <Button label={showCode ? 'Gizle' : 'Göster'} variant="ghost" size="sm" onClick={() => setShowCode(v => !v)} />
-              <Button label="Kopyala" variant="ghost" size="sm" onClick={() => navigator.clipboard?.writeText(S.config.code).then(() => core.hooks.toast?.('Kopyalandı')).catch(() => {})} />
+              <Button label={showCode ? 'Gizle' : 'Göster'} variant="ghost" size="lg" onClick={() => setShowCode(v => !v)} />
+              <Button label="Kopyala" variant="ghost" size="lg" onClick={() => navigator.clipboard?.writeText(S.config.code).then(() => core.hooks.toast?.('Kopyalandı')).catch(() => {})} />
             </div>
           </div>
         </Group>
@@ -156,9 +157,11 @@ export function Settings({ isOpen, onClose }) {
 
         <Group title="Sohbet">
           <div className="pk-pad pk-stack">
-            <Button label="Sohbeti iki taraftan da sil" variant="destructive" width="100%" onClick={() => setConfirm('all')} />
-            <Button label="Sohbeti yalnızca benden sil" variant="secondary" width="100%" onClick={() => setConfirm('me')} />
-            <Button label="Eşleşmeyi sıfırla" variant="secondary" width="100%" onClick={() => setConfirm('reset')} />
+            <div className="pk-danger-zone">
+              <Button label="Sohbeti yalnızca benden sil" variant="secondary" width="100%" className="pk-danger-text" onClick={() => setConfirm('me')} />
+              <Button label="Sohbeti iki taraftan da sil" variant="secondary" width="100%" className="pk-danger-text" onClick={() => setConfirm('all')} />
+              <Button label="Eşleşmeyi sıfırla" variant="destructive" width="100%" onClick={() => setConfirm('reset')} />
+            </div>
           </div>
         </Group>
       </div>
@@ -183,6 +186,24 @@ function ThemeCard({ name, index, dark, on, colors, onClick }) {
       </span>
       <span className="pk-theme-name">{name}</span>
     </button>
+  );
+}
+
+// Seçilen balon ve yazı renkleri 4.5:1'in altına düşerse uyarır ve tek dokunuşla düzeltir
+function ContrastWarning() {
+  const t = core.theme, root = getComputedStyle(document.documentElement);
+  const val = (k, fb) => t[k] ?? core.fromHex(toHexColor(root.getPropertyValue(fb)));
+  const pairs = [
+    ['senin balonunda', val('myBubble', '--pk-my-bubble-default'), val('myText', '--pk-my-text-default'), 'myText'],
+    ['karşı tarafın balonunda', val('theirBubble', '--pk-their-bubble-default'), val('theirText', '--pk-their-text-default'), 'theirText'],
+  ].filter(([, bg, fg]) => core.contrast(bg, fg) < 4.5);
+  if (!pairs.length) return null;
+  const fix = () => { const patch = {}; for (const [, bg, , k] of pairs) patch[k] = core.contrast(bg, 0xFFFFFF) >= core.contrast(bg, 0x111111) ? 0xFFFFFF : 0x111111; core.setTheme(patch); };
+  return (
+    <div className="pk-contrast-warn" role="status">
+      <span>Yazı {pairs.map(p => p[0]).join(' ve ')} zor okunuyor ({core.contrast(pairs[0][1], pairs[0][2]).toFixed(1)}:1).</span>
+      <button type="button" onClick={fix}>Düzelt</button>
+    </div>
   );
 }
 

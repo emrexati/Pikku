@@ -70,7 +70,9 @@ function Setup() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [codeTouched, setCodeTouched] = useState(false);
   const valid = core.codeIsValid(code);
+  const missing = !name.trim() ? 'Devam etmek için adını yaz.' : !valid ? 'Devam etmek için en az 12 karakterlik kodu gir ya da yeni kod üret.' : '';
   const copy = () => navigator.clipboard?.writeText(code).then(() => core.hooks.toast?.('Kopyalandı')).catch(() => {});
   const start = async () => {
     setBusy(true);
@@ -84,17 +86,20 @@ function Setup() {
         <Text type="supporting" as="p" justify="center" display="block">Yalnızca ikiniz için. Mesajlar, dosyalar ve aramalar uçtan uca şifreli.</Text>
         <div className="pk-form">
           <TextInput label="Adın" value={name} onChange={setName} placeholder="Örn. Emre" autoComplete="nickname" width="100%" size="lg" />
+          <div onBlur={() => setCodeTouched(true)}>
           <TextInput
             label="Eşleşme kodu" value={code} onChange={v => setCode(formatCode(v))} placeholder="XXXX-XXXX-XXXX-XXXX" width="100%" size="lg"
             autoCapitalize="characters" hasAutoCorrect={false} hasSpellCheck={false} controlClassName="pk-mono"
-            status={code && !valid ? { type: 'error', message: 'Kod en az 12 harf veya rakam olmalı' } : undefined}
+            status={codeTouched && code && !valid ? { type: 'error', message: `Kod çok kısa: ${core.normalize(code).length}/12 karakter. Eksiksiz yaz ya da “Yeni kod üret”e dokun.` } : undefined}
             description="Biriniz kod üretip diğerine güvenli bir yoldan iletsin; ikiniz de aynı kodu girin."
           />
-          <div className="pk-row-between">
-            <Button label="Yeni kod üret" variant="ghost" onClick={() => setCode(core.randomCode())} />
-            <Button label="Kopyala" variant="ghost" icon={<Icon icon={CopyIcon} />} isDisabled={!code} onClick={copy} />
           </div>
-          <Button label={busy ? 'Anahtar oluşturuluyor' : 'Başla'} variant="primary" size="lg" width="100%" isLoading={busy} isDisabled={!valid || !name.trim()} onClick={start} />
+          <div className="pk-row-between">
+            <Button label="Yeni kod üret" variant="ghost" size="lg" onClick={() => { setCode(core.randomCode()); setCodeTouched(false); }} />
+            <Button label="Kopyala" variant="ghost" size="lg" icon={<Icon icon={CopyIcon} />} isDisabled={!code} onClick={copy} />
+          </div>
+          <Button label={busy ? 'Anahtar oluşturuluyor' : 'Başla'} variant="primary" size="lg" width="100%" className="pk-cta" isLoading={busy} isDisabled={!valid || !name.trim()} onClick={start} aria-describedby="pk-setup-hint" />
+          <p id="pk-setup-hint" className="pk-setup-hint" aria-live="polite">{busy ? '' : missing}</p>
           <Text type="supporting" size="sm" as="p" justify="center" display="block">iPhone'daki Pikku ile aynı kod kullanılır; ikisi birbiriyle konuşur.</Text>
         </div>
       </div>

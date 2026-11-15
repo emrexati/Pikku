@@ -171,9 +171,9 @@ const WALLS = [
   { name: 'Olay Ufku', light: [0x06060A, 0x000000], dark: [0x06060A, 0x000000], style: 'eventHorizon',
     preset: { mode: 2, accent: 0xFF9F43, myBubble: 0xF08A2C, myText: 0x1A0D02, theirBubble: 0x1C1D22, theirText: 0xECEDEF } },
   { name: 'Laboratuvar', light: [0xF4FBF9, 0xE2F3EE], dark: [0x0B1E22, 0x0F2B30], style: 'science',
-    preset: { mode: 1, accent: 0x12A594, myBubble: 0x12A594, myText: 0xFFFFFF, theirBubble: 0xFFFFFF, theirText: 0x0E2A26 } },
+    preset: { mode: 1, accent: 0x0F9384, myBubble: 0x0B7A6E, myText: 0xFFFFFF, theirBubble: 0xFFFFFF, theirText: 0x0E2A26 } },
   { name: 'Uzay', light: [0x04051A, 0x160B30], dark: [0x04051A, 0x160B30], style: 'space',
-    preset: { mode: 2, accent: 0xA78BFA, myBubble: 0x7C5CFF, myText: 0xFFFFFF, theirBubble: 0x1C1E3C, theirText: 0xE8E8FF } },
+    preset: { mode: 2, accent: 0xA78BFA, myBubble: 0x6A48F0, myText: 0xFFFFFF, theirBubble: 0x1C1E3C, theirText: 0xE8E8FF } },
   { name: 'Sade', light: [0xFFFFFF, 0xFFFFFF], dark: [0x000000, 0x000000] }
 ];
 export const PLAIN_WALLS = [9, 0, 1, 2, 3, 4];
@@ -181,6 +181,18 @@ const ACCENTS = [0x007AFF, 0x34C759, 0x5856D6, 0xFF9500, 0xFF2D55, 0xFF3B30, 0x3
 const css = (h, a = 1) => `rgba(${h >> 16 & 255},${h >> 8 & 255},${h & 255},${a})`;
 const toHex = h => '#' + h.toString(16).padStart(6, '0');
 const fromHex = s => parseInt(s.slice(1), 16);
+// WCAG 2.x kontrast hesabı: normal metin için en az 4.5:1 hedeflenir
+const lum = h => { const f = v => (v /= 255) <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; return .2126 * f(h >> 16 & 255) + .7152 * f(h >> 8 & 255) + .0722 * f(h & 255); };
+export const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const mixBlack = (h, t) => (Math.round((h >> 16 & 255) * (1 - t)) << 16) | (Math.round((h >> 8 & 255) * (1 - t)) << 8) | Math.round((h & 255) * (1 - t));
+// Vurgu renginden okunaklı bir "benim balonum" üretir: beyaz yazı 4.5:1 tutana kadar koyulaştırır;
+// açık renklerde (sarı, turuncu) koyu yazıya geçmek daha iyiyse onu seçer.
+export function readableBubble(accent) {
+  if (contrast(accent, 0xFFFFFF) >= 4.5) return [accent, 0xFFFFFF];
+  if (contrast(accent, 0x111111) >= 7) return [accent, 0x111111];
+  for (let t = .04; t < .6; t += .04) { const d = mixBlack(accent, t); if (contrast(d, 0xFFFFFF) >= 4.5) return [d, 0xFFFFFF]; }
+  return [mixBlack(accent, .6), 0xFFFFFF];
+}
 
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const rr = (r, a, b) => a + r() * (b - a);
@@ -218,14 +230,20 @@ export function applyTheme() {
   const root = document.documentElement, dark = isDark(), s = root.style;
   root.toggleAttribute('data-dark', dark);
   s.colorScheme = dark ? 'dark' : 'light';
-  const acc = toHex(theme.accent);
-  for (const k of ['--pk-accent', '--color-accent', '--color-text-accent', '--color-icon-accent']) s.setProperty(k, acc);
+  // Açık zeminde vurgu rengi yazı/simge olarak da okunmalı: gerekiyorsa koyulaştırılmış bir "mürekkep" türetilir
+  const inkFor = min => { if (dark) return theme.accent; let h = theme.accent; for (let t = .04; contrast(h, 0xFFFFFF) < min && t < .7; t += .04) h = mixBlack(theme.accent, t); return h; };
+  const acc = toHex(theme.accent), icon = toHex(inkFor(3)), text = toHex(inkFor(4.5));
+  s.setProperty('--color-accent', acc);
+  s.setProperty('--pk-accent', icon); s.setProperty('--color-icon-accent', icon); s.setProperty('--color-text-accent', text);
   s.setProperty('--color-accent-muted', css(theme.accent, .2));
   s.setProperty('--pk-fs', theme.fontSize + 'px');
   const setOpt = (name, v, meta) => {
     if (v == null) { s.removeProperty(name); if (meta) s.removeProperty(meta); }
-    else { s.setProperty(name, toHex(v)); if (meta) s.setProperty(meta, css(v, .62)); }
+    else { s.setProperty(name, toHex(v)); if (meta) s.setProperty(meta, css(v, .8)); }
   };
+  const [bub, ink] = readableBubble(theme.accent);
+  s.setProperty('--pk-my-bubble-default', toHex(bub)); s.setProperty('--pk-my-text-default', toHex(ink));
+  s.setProperty('--pk-my-meta-default', css(ink, .82)); s.setProperty('--pk-on-accent', contrast(theme.accent, 0xFFFFFF) >= 3 ? '#FFFFFF' : '#111111');
   setOpt('--pk-my-bubble', theme.myBubble); setOpt('--pk-my-text', theme.myText, '--pk-my-meta');
   setOpt('--pk-their-bubble', theme.theirBubble); setOpt('--pk-their-text', theme.theirText, '--pk-their-meta');
   const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = dark ? '#000000' : '#FFFFFF';
