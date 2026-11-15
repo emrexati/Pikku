@@ -1,3 +1,4 @@
+import { storybook, eventHorizon, science, space } from './painter.js';
 // Pikku çekirdeği: şifreleme, aktarma, mesajlar, aramalar ve tema durumu.
 // Arayüzden bağımsızdır; iPhone'daki Pikku ile aynı protokolü kullanır.
 
@@ -163,14 +164,14 @@ const WALLS = [
   { name: 'Gün batımı', light: [0xF2AE86, 0xF8DDC0], dark: [0x2A1515, 0x1A0F14] },
   { name: 'Lavanta', light: [0xC3B5E8, 0xE6DEF6], dark: [0x1B1530, 0x120E22] },
   { name: 'Gri', light: [0xD5D8DC, 0xEEF0F2], dark: [0x1C1C1E, 0x121214] },
-  { name: 'Masal Gezegeni', light: [0x24306A, 0xF4C9A2], dark: [0x10153A, 0x4A3A6A], style: 'storybook',
-    preset: { mode: 0, accent: 0xE9A23B, myBubble: 0xFFF1D6, myText: 0x3A2A10, theirBubble: 0xFFFFFF, theirText: 0x1E2A5A } },
-  { name: 'Olay Ufku', light: [0x05060A, 0x0B0D16], dark: [0x05060A, 0x0B0D16], style: 'eventHorizon',
-    preset: { mode: 2, accent: 0xF4A340, myBubble: 0x3A2814, myText: 0xFFE7B0, theirBubble: 0x1A1C24, theirText: 0xE6E8EF } },
-  { name: 'Laboratuvar', light: [0xE4F6F1, 0xF4FBF9], dark: [0x0C2226, 0x10292E], style: 'science',
-    preset: { mode: 1, accent: 0x1FA08A, myBubble: 0xD0F2EA, myText: 0x0D3B33, theirBubble: 0xFFFFFF, theirText: 0x16302B } },
-  { name: 'Uzay', light: [0x0B0F2E, 0x2A1550], dark: [0x0B0F2E, 0x2A1550], style: 'space',
-    preset: { mode: 2, accent: 0x8E7CFF, myBubble: 0x3B2C7A, myText: 0xF1EEFF, theirBubble: 0x1B1F3B, theirText: 0xE4E6FF } },
+  { name: 'Masal Gezegeni', light: [0x161A44, 0xF6CDA0], dark: [0x161A44, 0xF6CDA0], style: 'storybook',
+    preset: { mode: 2, accent: 0xF2B35B, myBubble: 0xF4BE73, myText: 0x2B1A08, theirBubble: 0x2C2652, theirText: 0xF5EEFF } },
+  { name: 'Olay Ufku', light: [0x06060A, 0x000000], dark: [0x06060A, 0x000000], style: 'eventHorizon',
+    preset: { mode: 2, accent: 0xFF9F43, myBubble: 0xF08A2C, myText: 0x1A0D02, theirBubble: 0x1C1D22, theirText: 0xECEDEF } },
+  { name: 'Laboratuvar', light: [0xF4FBF9, 0xE2F3EE], dark: [0x0B1E22, 0x0F2B30], style: 'science',
+    preset: { mode: 1, accent: 0x12A594, myBubble: 0x12A594, myText: 0xFFFFFF, theirBubble: 0xFFFFFF, theirText: 0x0E2A26 } },
+  { name: 'Uzay', light: [0x04051A, 0x160B30], dark: [0x04051A, 0x160B30], style: 'space',
+    preset: { mode: 2, accent: 0xA78BFA, myBubble: 0x7C5CFF, myText: 0xFFFFFF, theirBubble: 0x1C1E3C, theirText: 0xE8E8FF } },
   { name: 'Sade', light: [0xFFFFFF, 0xFFFFFF], dark: [0x000000, 0x000000] }
 ];
 export const PLAIN_WALLS = [9, 0, 1, 2, 3, 4];
@@ -182,82 +183,7 @@ const fromHex = s => parseInt(s.slice(1), 16);
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const rr = (r, a, b) => a + r() * (b - a);
 
-const Paint = {
-  sparkle(c, x, y, r) { c.beginPath(); c.moveTo(x, y - r); c.quadraticCurveTo(x, y, x + r, y); c.quadraticCurveTo(x, y, x, y + r); c.quadraticCurveTo(x, y, x - r, y); c.quadraticCurveTo(x, y, x, y - r); c.fill(); },
-  stars(c, w, h, n, maxY, color, seed) {
-    const r = rng(seed);
-    for (let i = 0; i < n; i++) { const x = rr(r, 0, w), y = rr(r, 0, h * maxY), s = rr(r, .6, 2); c.fillStyle = css(color, rr(r, .25, .95)); c.beginPath(); c.arc(x, y, s, 0, 7); c.fill(); }
-    c.fillStyle = css(color, .85);
-    for (let i = 0; i < Math.max(3, n / 20 | 0); i++) this.sparkle(c, rr(r, 0, w), rr(r, 0, h * maxY), rr(r, 5, 9));
-  },
-  planet(c, x, y, R, b0, b1, ring, tilt) {
-    const ringPath = () => { c.beginPath(); c.ellipse(0, 0, R * 1.9, R * .45, 0, 0, Math.PI * 2); };
-    c.save(); c.translate(x, y); c.rotate(tilt * Math.PI / 180); ringPath(); c.strokeStyle = css(ring, .8); c.lineWidth = R * .16; c.stroke(); c.restore();
-    const g = c.createLinearGradient(x - R, y - R, x + R, y + R); g.addColorStop(0, css(b0)); g.addColorStop(1, css(b1));
-    c.fillStyle = g; c.beginPath(); c.arc(x, y, R, 0, 7); c.fill();
-    c.save(); c.translate(x, y); c.rotate(tilt * Math.PI / 180); c.beginPath(); c.rect(-R * 2.2, 0, R * 4.4, R); c.clip(); ringPath(); c.strokeStyle = css(ring, .95); c.lineWidth = R * .16; c.stroke(); c.restore();
-  },
-  storybook(c, w, h, dark) {
-    this.stars(c, w, h, 70, .55, 0xFFF4D6, 11);
-    const mx = w * .8, my = h * .12;
-    c.save(); c.beginPath(); c.arc(mx, my, 26, 0, 7); c.arc(mx + 12, my - 8, 26, 0, 7, true); c.fillStyle = css(0xFFE9B8, .95); c.fill('evenodd'); c.restore();
-    this.planet(c, w * .18, h * .3, 15, 0xF7C6D9, 0xC98BD6, 0xFFF4D6, -14);
-    const r = rng(23);
-    for (let i = 0; i < 5; i++) { const cx = rr(r, 0, w), cy = rr(r, h * .35, h * .62), cw = rr(r, 90, 170); c.fillStyle = css(0xFFFFFF, dark ? .06 : .16); c.beginPath(); c.roundRect(cx - cw / 2, cy, cw, cw * .26, cw * .13); c.fill(); }
-    c.fillStyle = css(dark ? 0x3A2E62 : 0xE9B48E, .75); c.beginPath(); c.ellipse(-w * .3 + w * .55, h * .82 + h * .25, w * .55, h * .25, 0, 0, 7); c.fill();
-    c.fillStyle = css(dark ? 0x2A2350 : 0xDD9C7A, .85); c.beginPath(); c.ellipse(w * .25 + w * .6, h * .88 + h * .25, w * .6, h * .25, 0, 0, 7); c.fill();
-  },
-  eventHorizon(c, w, h) {
-    this.stars(c, w, h, 150, 1, 0xFFFFFF, 7);
-    const x = w * .5, y = h * .3, R = Math.min(w, h) * .15;
-    const disk = () => { c.beginPath(); c.ellipse(0, 0, R * 2.7, R * .5, 0, 0, 7); };
-    c.save(); c.translate(x, y); c.rotate(-8 * Math.PI / 180); c.filter = 'blur(14px)'; disk(); c.strokeStyle = css(0xF4A340, .55); c.lineWidth = R * .45; c.stroke(); c.restore();
-    c.save(); c.translate(x, y); c.rotate(-8 * Math.PI / 180); disk(); c.strokeStyle = css(0xFFD58A, .8); c.lineWidth = R * .12; c.stroke(); c.restore();
-    c.save(); c.filter = 'blur(10px)'; c.beginPath(); c.arc(x, y, R * 1.1, 0, 7); c.strokeStyle = css(0xFFC56B, .9); c.lineWidth = R * .22; c.stroke(); c.restore();
-    c.beginPath(); c.arc(x, y, R * 1.05, 0, 7); c.strokeStyle = css(0xFFF1CF, .9); c.lineWidth = 2; c.stroke();
-    c.beginPath(); c.arc(x, y, R, 0, 7); c.fillStyle = '#000'; c.fill();
-    c.save(); c.translate(x, y); c.rotate(-8 * Math.PI / 180); c.beginPath(); c.rect(-R * 3, 0, R * 6, R); c.clip();
-    disk(); c.strokeStyle = css(0xFFB24D, .95); c.lineWidth = R * .22; c.stroke(); disk(); c.strokeStyle = css(0xFFF1CF, .9); c.lineWidth = 2; c.stroke(); c.restore();
-  },
-  icon(c, k) {
-    c.beginPath();
-    switch (k) {
-      case 0: c.ellipse(0, 0, 12, 4.5, 0, 0, 7); c.moveTo(12 * Math.cos(1.05) * .0, 0); c.stroke(); c.beginPath(); c.ellipse(0, 0, 12, 4.5, 1.05, 0, 7); c.stroke(); c.beginPath(); c.ellipse(0, 0, 12, 4.5, -1.05, 0, 7); c.stroke(); c.beginPath(); c.arc(0, 0, 2, 0, 7); c.fill(); return;
-      case 1: c.moveTo(-4, -11); c.lineTo(-4, -3); c.lineTo(-10, 9); c.quadraticCurveTo(-11, 11, -8, 11); c.lineTo(8, 11); c.quadraticCurveTo(11, 11, 10, 9); c.lineTo(4, -3); c.lineTo(4, -11); c.moveTo(-6, -11); c.lineTo(6, -11); c.moveTo(-7, 4); c.lineTo(7, 4); break;
-      case 2: c.arc(0, -3, 7, Math.PI * .8, Math.PI * 2.2); c.lineTo(3.5, 7); c.lineTo(-3.5, 7); c.closePath(); c.moveTo(-3, 10); c.lineTo(3, 10); break;
-      case 3: c.moveTo(-9, 9); c.quadraticCurveTo(-10, -9, 10, -10); c.quadraticCurveTo(9, 9, -9, 9); c.moveTo(-9, 9); c.lineTo(3, -3); break;
-      case 4: c.moveTo(0, -11); c.quadraticCurveTo(9, 0, 7, 5); c.arc(0, 4, 7, 0.1, Math.PI - .1); c.quadraticCurveTo(-9, 0, 0, -11); break;
-      case 5: c.moveTo(2, -11); c.lineTo(-6, 1); c.lineTo(1, 1); c.lineTo(-2, 11); c.lineTo(7, -2); c.lineTo(0, -2); c.closePath(); break;
-      case 6: for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; c[i ? 'lineTo' : 'moveTo'](11 * Math.cos(a), 11 * Math.sin(a)); } c.closePath(); c.moveTo(6, 0); c.arc(0, 0, 6, 0, 7); break;
-      case 7: c.arc(0, 0, 5, 0, 7); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; c.moveTo(8 * Math.cos(a), 8 * Math.sin(a)); c.lineTo(11 * Math.cos(a), 11 * Math.sin(a)); } break;
-      case 8: for (let i = -10; i <= 10; i += 1) { const y = i, x = 6 * Math.sin(i / 3.2); i === -10 ? c.moveTo(x, y) : c.lineTo(x, y); } for (let i = -10; i <= 10; i += 1) { const y = i, x = -6 * Math.sin(i / 3.2); i === -10 ? c.moveTo(x, y) : c.lineTo(x, y); } for (let i = -8; i <= 8; i += 4) { c.moveTo(-6 * Math.sin(i / 3.2), i); c.lineTo(6 * Math.sin(i / 3.2), i); } break;
-      default: c.arc(-2, -2, 7, 0, 7); c.moveTo(3, 3); c.lineTo(10, 10);
-    }
-    c.stroke();
-  },
-  science(c, w, h, dark) {
-    const r = rng(42), cell = 76;
-    c.strokeStyle = css(dark ? 0x5FD3BC : 0x1FA08A, dark ? .24 : .22); c.fillStyle = c.strokeStyle; c.lineWidth = 1.6; c.lineCap = 'round'; c.lineJoin = 'round';
-    for (let row = 0; row < h / cell + 2; row++) for (let col = 0; col < w / cell + 2; col++) {
-      const x = col * cell + (row % 2 ? cell / 2 : 0) + rr(r, -12, 12), y = row * cell + rr(r, -12, 12);
-      c.save(); c.translate(x, y); c.rotate(rr(r, -.45, .45)); const s = rr(r, .9, 1.3); c.scale(s, s); this.icon(c, Math.floor(r() * 10)); c.restore();
-    }
-  },
-  space(c, w, h) {
-    for (const [fx, fy, fr, col] of [[.2, .25, .55, 0x8E5CF7], [.85, .55, .5, 0xE84D8A], [.3, .85, .6, 0x2AA3E6]]) {
-      const x = w * fx, y = h * fy, R = Math.max(w, h) * fr, g = c.createRadialGradient(x, y, 0, x, y, R);
-      g.addColorStop(0, css(col, .38)); g.addColorStop(1, css(col, 0)); c.fillStyle = g; c.fillRect(0, 0, w, h);
-    }
-    this.stars(c, w, h, 170, 1, 0xFFFFFF, 99);
-    this.planet(c, w * .78, h * .16, 34, 0xFFB37A, 0xE0607E, 0x9FE8DE, -18);
-    const mx = w * .16, my = h * .68, g = c.createLinearGradient(mx - 20, my - 20, mx + 20, my + 20);
-    g.addColorStop(0, css(0xE8E6F0)); g.addColorStop(1, css(0x9C98B8)); c.fillStyle = g; c.beginPath(); c.arc(mx, my, 20, 0, 7); c.fill();
-    c.fillStyle = css(0x7E7A9C, .6); for (const [dx, dy, cr] of [[-6, -5, 5], [7, 4, 4], [-2, 9, 3]]) { c.beginPath(); c.arc(mx + dx, my + dy, cr, 0, 7); c.fill(); }
-    const tg = c.createLinearGradient(w * .42, h * .42, w * .6, h * .36); tg.addColorStop(0, 'rgba(255,255,255,0)'); tg.addColorStop(1, 'rgba(255,255,255,.8)');
-    c.strokeStyle = tg; c.lineWidth = 2.5; c.lineCap = 'round'; c.beginPath(); c.moveTo(w * .42, h * .42); c.lineTo(w * .6, h * .36); c.stroke();
-    c.fillStyle = '#fff'; c.beginPath(); c.arc(w * .6, h * .36, 3, 0, 7); c.fill();
-  }
-};
+const Paint = { storybook, eventHorizon, science, space };
 
 function paintWall(canvas, index, dark) {
   const wall = WALLS[Math.min(Math.max(index, 0), WALLS.length - 1)];

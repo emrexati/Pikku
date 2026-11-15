@@ -17,7 +17,7 @@ import { Lightbox } from '@astryxdesign/core/Lightbox';
 import { useToast } from '@astryxdesign/core/Toast';
 import {
   ChatLayout, ChatMessageList, ChatMessage, ChatMessageBubble, ChatMessageMetadata,
-  ChatSystemMessage, ChatComposer, ChatComposerInput, ChatComposerDrawer
+  ChatSystemMessage, ChatComposerInput, ChatSendButton
 } from '@astryxdesign/core/Chat';
 import * as core from './core.js';
 import { S, Call } from './core.js';
@@ -132,27 +132,29 @@ function Chat() {
   const cancelContext = () => { if (editing) setDraft(''); setEditing(null); setReplying(null); };
 
   const context = editing || replying;
-  const drawer = context ? (
-    <ChatComposerDrawer>
-      <div className="pk-context">
-        <span className="pk-context-bar" />
-        <div className="pk-context-text">
-          <Text type="label" color="accent" display="block">{editing ? 'Düzenleniyor' : context.mine ? 'Kendi mesajına yanıt' : `${core.displayPeer()} yanıtlanıyor`}</Text>
-          <Text type="supporting" maxLines={1} display="block" hasTruncateTooltip={false}>{preview(context)}</Text>
-        </div>
-        <IconButton label="Vazgeç" variant="ghost" size="sm" icon={<Icon icon={PlusIcon} style={{ transform: 'rotate(45deg)' }} />} onClick={cancelContext} />
-      </div>
-    </ChatComposerDrawer>
-  ) : null;
-
+  const canSend = !!draft.trim();
   const composer = (
-    <ChatComposer
-      value={draft} onChange={onDraft} onSubmit={submit} placeholder="Mesaj" density="balanced" drawer={drawer}
-      input={<ChatComposerInput placeholder="Mesaj" pasteAsToken={false} hasHistory={false} maxRows={6} label="Mesaj yaz" onFiles={pickFiles} />}
-      sendActions={
-        <IconButton label="Fotoğraf veya video ekle" variant="ghost" icon={<Icon icon={PlusIcon} />} isDisabled={!!editing} onClick={() => fileRef.current?.click()} />
-      }
-    />
+    <div className="pk-composer">
+      {context && (
+        <div className="pk-context">
+          <span className="pk-context-bar" />
+          <div className="pk-context-text">
+            <Text type="label" color="accent" display="block">{editing ? 'Düzenleniyor' : context.mine ? 'Kendi mesajına yanıt' : `${core.displayPeer()} yanıtlanıyor`}</Text>
+            <Text type="supporting" maxLines={1} display="block" hasTruncateTooltip={false}>{preview(context)}</Text>
+          </div>
+          <IconButton label="Vazgeç" variant="ghost" size="sm" icon={<Icon icon={PlusIcon} style={{ transform: 'rotate(45deg)' }} />} onClick={cancelContext} />
+        </div>
+      )}
+      <div className="pk-compose-row">
+        <button type="button" className="pk-attach" aria-label="Fotoğraf veya video ekle" disabled={!!editing} onClick={() => fileRef.current?.click()}>
+          <Icon icon={PlusIcon} size="md" />
+        </button>
+        <div className="pk-field">
+          <ChatComposerInput value={draft} onChange={onDraft} onSubmit={submit} placeholder="Mesaj" pasteAsToken={false} hasHistory={false} maxRows={5} label="Mesaj yaz" onFiles={pickFiles} />
+        </div>
+        <ChatSendButton onSend={() => submit()} isDisabled={!canSend} size="sm" className="pk-send" />
+      </div>
+    </div>
   );
 
   const rows = useMemo(() => buildRows(S.messages), [core.getVersion()]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -95,7 +95,22 @@ body { margin: 0; background: transparent; overflow: hidden; -webkit-font-smooth
 .pk-spinner { width: 22px; height: 22px; border: 2.5px solid rgba(255, 255, 255, .35); border-top-color: #fff; border-radius: 50%; animation: pk-spin .8s linear infinite; }
 @keyframes pk-spin { to { transform: rotate(360deg); } }
 
-.pk-context { display: flex; align-items: center; gap: 10px; padding: 2px 4px 2px 6px; }
+.pk-composer { padding: 6px 10px calc(var(--pk-safe-b) + 8px); background: var(--pk-bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: .5px solid var(--pk-hair); margin: 0 calc(-1 * var(--pk-dock-pad, 0px)); }
+.pk-compose-row { display: flex; align-items: flex-end; gap: 8px; max-width: 900px; margin: 0 auto; }
+.pk-attach { flex: none; width: 34px; height: 34px; margin-bottom: 1px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--pk-attach-ink, #fff); background: var(--pk-attach, #34C759); transition: transform .15s ease, opacity .15s ease; }
+.pk-attach:active { transform: scale(.92); }
+.pk-attach:disabled { opacity: .35; cursor: default; }
+.pk-attach:focus-visible { outline: 3px solid var(--pk-accent); outline-offset: 2px; }
+.pk-field { flex: 1; min-width: 0; min-height: 36px; display: flex; align-items: center; border-radius: 18px; padding: 0 14px; background: var(--pk-field, rgba(255,255,255,.9)); box-shadow: inset 0 0 0 .5px var(--pk-hair); }
+:root[data-dark] .pk-field { --pk-field: rgba(44,44,46,.9); }
+.pk-field > * { width: 100%; }
+.pk-field .astryx-chat-composer-input > :first-child:not([contenteditable]) { top: 7px; font-size: var(--pk-fs); line-height: 1.3; color: var(--pk-label2); }
+*:has(> .pk-composer) { padding: 0 !important; max-width: none !important; }
+.pk-field [contenteditable] { font-size: var(--pk-fs) !important; line-height: 1.3 !important; padding-block: 7px !important; min-height: 0 !important; }
+.pk-send { flex: none; margin-bottom: 1px; }
+.pk-send.astryx-button { width: 34px !important; height: 34px !important; min-width: 34px; border-radius: 50% !important; background: var(--pk-accent) !important; color: #fff !important; }
+.pk-send.astryx-button[aria-disabled="true"] { background: rgba(127,127,127,.35) !important; }
+.pk-context { display: flex; align-items: center; gap: 10px; padding: 2px 4px 8px 6px; max-width: 900px; margin: 0 auto; }
 .pk-context-bar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--pk-accent); }
 .pk-context-text { flex: 1; min-width: 0; }
 
