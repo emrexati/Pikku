@@ -13,6 +13,7 @@ import * as core from './core.js';
 import { S } from './core.js';
 import { useCore } from './store.js';
 import { WallThumb } from './Wallpaper.jsx';
+import { themeReveal } from './motion.js';
 
 function Group({ title, footer, children }) {
   return (
@@ -69,17 +70,17 @@ export function Settings({ isOpen, onClose }) {
 
         <Group title="Temalar" footer="Tema; arka planı, vurgu rengini, açık/koyu görünümü ve balon renklerini birlikte değiştirir.">
           <div className="pk-themes">
-            <ThemeCard name="Klasik" index={9} dark={dark} on={core.isClassic()} colors={[0x007AFF, null]} onClick={core.resetTheme} />
+            <ThemeCard name="Klasik" index={9} dark={dark} on={core.isClassic()} colors={[0x007AFF, null]} onClick={e => themeReveal(e, core.resetTheme)} />
             {core.WALLS.map((w, i) => w.preset ? (
               <ThemeCard key={i} name={w.name} index={i} dark={w.preset.mode === 1 ? false : w.preset.mode === 2 ? true : dark}
-                on={core.presetActive(i)} colors={[w.preset.myBubble, w.preset.theirBubble]} onClick={() => core.applyPreset(i)} />
+                on={core.presetActive(i)} colors={[w.preset.myBubble, w.preset.theirBubble]} onClick={e => themeReveal(e, () => core.applyPreset(i))} />
             ) : null)}
           </div>
         </Group>
 
         <Group title="Görünüm">
           <div className="pk-pad">
-            <SegmentedControl label="Görünüm" value={String(t.mode)} onChange={v => core.setTheme({ mode: Number(v) })} layout="fill" isDisabled={!!core.WALLS[t.wallpaper]?.preset} disabledMessage="Çizimli temalar kendi açık/koyu görünümünü kullanır">
+            <SegmentedControl label="Görünüm" value={String(t.mode)} onChange={v => themeReveal(null, () => core.setTheme({ mode: Number(v) }))} layout="fill" isDisabled={!!core.WALLS[t.wallpaper]?.preset} disabledMessage="Çizimli temalar kendi açık/koyu görünümünü kullanır">
               <SegmentedControlItem value="0" label="Sistem" />
               <SegmentedControlItem value="1" label="Açık" />
               <SegmentedControlItem value="2" label="Koyu" />
@@ -98,7 +99,7 @@ export function Settings({ isOpen, onClose }) {
             <Text display="block">Arka plan</Text>
             <div className="pk-walls">
               {core.PLAIN_WALLS.map(i => (
-                <button key={i} type="button" className={'pk-wall' + (t.wallpaper === i ? ' on' : '')} onClick={() => core.selectWall(i)}>
+                <button key={i} type="button" className={'pk-wall' + (t.wallpaper === i ? ' on' : '')} onClick={e => themeReveal(e, () => core.selectWall(i))}>
                   <WallThumb index={i} dark={dark} className="pk-wall-canvas" />
                   <span>{core.WALLS[i].name}</span>
                 </button>
@@ -120,7 +121,7 @@ export function Settings({ isOpen, onClose }) {
             <div className="pk-pv pk-pv-theirs">Merhaba, nasılsın?</div>
             <div className="pk-pv pk-pv-mine">İyiyim, sen?</div>
           </div>
-          <div className="pk-pad"><Button label="Varsayılan temaya dön" variant="secondary" width="100%" onClick={core.resetTheme} /></div>
+          <div className="pk-pad"><Button label="Varsayılan temaya dön" variant="secondary" width="100%" onClick={e => themeReveal(e, core.resetTheme)} /></div>
         </Group>
 
         <Group title="Gizlilik ve güvenlik" footer="Çevrimiçi bilgini kapatırsan karşı tarafınkini de göremezsin. Otomatik silme iki cihazda da geçerli olur. Sohbet geçmişi bu tarayıcıda şifreli tutulur; bildirimlerde mesaj içeriği gösterilmez.">
@@ -199,6 +200,7 @@ function ColorRow({ label, k, fallback }) {
 function toHexColor(v) {
   v = (v || '').trim();
   if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/i.test(v)) return '#' + [...v.slice(1)].map(c => c + c).join('');
   const m = v.match(/\d+(\.\d+)?/g);
-  return m ? '#' + m.slice(0, 3).map(n => Math.round(+n).toString(16).padStart(2, '0')).join('') : '#000000';
+  return m && m.length >= 3 ? '#' + m.slice(0, 3).map(n => Math.round(+n).toString(16).padStart(2, '0')).join('') : '#000000';
 }

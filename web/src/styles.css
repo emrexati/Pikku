@@ -106,8 +106,7 @@ input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
   box-shadow: 0 0 0 .5px var(--pk-hair), 0 6px 24px rgba(0, 0, 0, .12);
 }
 .pk-compose-row { display: flex; align-items: flex-end; gap: 6px; }
-.pk-attach { flex: none; width: 34px; height: 34px; margin-bottom: 1px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--pk-attach-ink, #fff); background: var(--pk-attach, #34C759); transition: transform .15s ease, opacity .15s ease; }
-.pk-attach:active { transform: scale(.92); }
+.pk-attach { flex: none; width: 34px; height: 34px; margin-bottom: 1px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--pk-attach-ink, #fff); background: var(--pk-attach, #34C759); }
 .pk-attach:disabled { opacity: .35; cursor: default; }
 .pk-attach:focus-visible { outline: 3px solid var(--pk-accent); outline-offset: 2px; }
 .pk-field { flex: 1; min-width: 0; min-height: 36px; display: flex; align-items: center; padding: 0 6px; background: transparent; }
@@ -156,8 +155,8 @@ input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
 .pk-wall.on .pk-wall-canvas { box-shadow: 0 0 0 3px var(--pk-accent); }
 .pk-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; padding: 14px; }
 .pk-theme { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 7px; }
-.pk-theme-art { position: relative; width: 100%; height: 150px; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 .5px var(--pk-hair); transition: transform .2s ease; }
-.pk-theme:hover .pk-theme-art { transform: translateY(-2px); }
+.pk-theme-art { position: relative; width: 100%; height: 150px; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 .5px var(--pk-hair); }
+
 .pk-theme.on .pk-theme-art { box-shadow: 0 0 0 3px var(--pk-accent); }
 .pk-theme-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .pk-theme-bubbles { position: absolute; left: 10px; right: 10px; bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
@@ -188,15 +187,13 @@ input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
 .pk-call-controls { position: relative; z-index: 1; margin-top: auto; margin-bottom: calc(var(--pk-safe-b) + 40px); display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; padding: 0 16px; }
 .pk-call-controls.incoming { gap: 88px; }
 .pk-cbtn { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 7px; }
-.pk-cbtn-circle { width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); transition: transform .15s ease, background .15s ease; }
-.pk-cbtn:active .pk-cbtn-circle { transform: scale(.94); }
+.pk-cbtn-circle { width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
 .pk-cbtn.on .pk-cbtn-circle { background: #fff; color: #000; }
 .pk-cbtn.red .pk-cbtn-circle { background: #FF3B30; }
 .pk-cbtn.green .pk-cbtn-circle { background: #34C759; }
 .pk-cbtn:focus-visible .pk-cbtn-circle { outline: 3px solid #fff; outline-offset: 3px; }
 .pk-cbtn-label { font-size: 13px; color: rgba(255, 255, 255, .85); }
 
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 .pk-call .astryx-avatar, .pk-call .astryx-avatar-fallback { background: rgba(255, 255, 255, .16) !important; color: #fff !important; font-weight: 500; }
 .pk-top .astryx-avatar-fallback { background: linear-gradient(#A7ABB3, #858A93) !important; color: #fff !important; }
 
@@ -241,3 +238,106 @@ input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
 .pk-scrim { position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background: radial-gradient(ellipse 60% 75% at 50% 55%, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0) 75%); }
 .pk-scrim.dark { background: radial-gradient(ellipse 60% 75% at 50% 55%, rgba(0, 0, 0, .32), rgba(0, 0, 0, 0) 75%); }
+
+/* ───────────── Hareket (Emil Kowalski ilkeleri) ─────────────
+   Yalnızca transform / opacity / filter canlandırılır; giriş ease-out ya da yay,
+   çıkış hızlı; sık yapılan şeyler (klavye, kaydırma) hiç canlanmaz. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --spring: linear(0, 0.0173, 0.0621, 0.1254, 0.2001, 0.2804, 0.3623, 0.4426, 0.5191, 0.5903, 0.6554, 0.7139, 0.7657, 0.8109, 0.8499, 0.8831, 0.911, 0.9341, 0.953, 0.9683, 0.9804, 0.9898, 0.997, 1.0023, 1.006, 1.0085, 1.0101, 1.0109, 1.0111, 1.0109, 1.0104, 1.0097, 1);
+  --spring-bouncy: linear(0, 0.0176, 0.0639, 0.1306, 0.2105, 0.2976, 0.3875, 0.4763, 0.5614, 0.6407, 0.7131, 0.7777, 0.8343, 0.8828, 0.9236, 0.9572, 0.9841, 1.0051, 1.0209, 1.0322, 1.0396, 1.044, 1.0458, 1.0457, 1.044, 1.0413, 1.0378, 1.0339, 1.0298, 1.0257, 1.0217, 1.018, 1);
+}
+
+/* Basma geri bildirimi: dokunulan her şey hafifçe içeri çöker, bırakınca anında döner */
+.pk-attach, .pk-send.astryx-button, .pk-top .astryx-icon-button, .pk-cbtn-circle, .pk-theme-art,
+.pk-swatch, .pk-wall-canvas, .pk-quote, .pk-media, .pk-context .astryx-icon-button {
+  transition: transform 160ms var(--ease-out), background-color 200ms ease, opacity 200ms ease, box-shadow 200ms ease;
+}
+.pk-attach:active, .pk-top .astryx-icon-button:active, .pk-context .astryx-icon-button:active { transform: scale(.9); }
+.pk-send.astryx-button:active:not([aria-disabled="true"]) { transform: scale(.88); }
+.pk-cbtn:active .pk-cbtn-circle { transform: scale(.92); }
+.pk-theme:active .pk-theme-art, .pk-wall:active .pk-wall-canvas { transform: scale(.96); }
+.pk-swatch:active { transform: scale(.85); }
+.pk-quote:active, .pk-media:active { transform: scale(.98); }
+@media (hover: hover) and (pointer: fine) {
+  .pk-theme:hover .pk-theme-art { transform: translateY(-2px); }
+  .pk-theme:active .pk-theme-art { transform: scale(.96); }
+}
+
+/* Gönder düğmesi: yazmaya başlayınca yayla "uyanır" */
+.pk-send.astryx-button { transition: transform 420ms var(--spring-bouncy), background-color 200ms ease, opacity 200ms ease; }
+.pk-send.astryx-button[aria-disabled="true"] { transform: scale(.86); }
+
+/* Mesaj balonu: basılı tutunca (menü açılmadan hemen önce) hafifçe içeri gömülür.
+   Gecikme, kaydırırken dokunuşların balonları oynatmasını engeller. */
+.astryx-chat-message-bubble { transition: transform 220ms var(--ease-out); }
+.astryx-chat-message-bubble:active { transform: scale(.97); transition: transform 360ms var(--ease-out) 140ms; }
+
+/* Yeni mesaj girişi — yalnızca sayfa açıldıktan SONRA gelen mesajlar canlanır.
+   @starting-style keyframes değil geçiş kullanır; art arda gelen mesajlarda takılmaz. */
+.pk-ready .astryx-chat-message { transition: opacity 260ms var(--ease-out), transform 520ms var(--spring), filter 260ms var(--ease-out); }
+.pk-ready .astryx-chat-message[data-sender="user"], .pk-ready .astryx-chat-message:has([data-sender="user"]) { transform-origin: 100% 100%; }
+.pk-ready .astryx-chat-message[data-sender="assistant"], .pk-ready .astryx-chat-message:has([data-sender="assistant"]) { transform-origin: 0% 100%; }
+@starting-style {
+  .pk-ready .astryx-chat-message { opacity: 0; transform: translateY(14px) scale(.94); filter: blur(4px); }
+}
+
+/* Durum satırı (çevrimiçi / yazıyor… / son görülme) bulanık geçişle değişir */
+.pk-peer-status { transition: opacity 220ms var(--ease-out), filter 220ms var(--ease-out), color 200ms ease; }
+@starting-style { .pk-peer-status { opacity: 0; filter: blur(3px); } }
+
+/* Yanıt / düzenleme şeridi */
+.pk-context { transition: opacity 200ms var(--ease-out), transform 320ms var(--spring); }
+@starting-style { .pk-context { opacity: 0; transform: translateY(8px); } }
+
+/* Gün etiketi ve sistem satırları yumuşakça belirir */
+.pk-ready .pk-day span, .pk-ready .astryx-chat-system-message { transition: opacity 240ms var(--ease-out); }
+@starting-style { .pk-ready .pk-day span, .pk-ready .astryx-chat-system-message { opacity: 0; } }
+
+/* Medya: bulanık önizlemeden net görüntüye geçiş (blur-up) */
+.pk-media-img { animation: pk-unblur 420ms var(--ease-out); }
+@keyframes pk-unblur { from { opacity: 0; filter: blur(12px); transform: scale(1.06); } }
+.pk-media-badge { transition: opacity 200ms ease, transform 300ms var(--spring); }
+@starting-style { .pk-media-badge { opacity: 0; transform: scale(.8); } }
+
+/* İlk kurulum ekranı: nadir görülür, biraz incelik hak eder (kademeli giriş) */
+.pk-setup > * { animation: pk-rise 560ms var(--ease-out) backwards; }
+.pk-setup > :nth-child(1) { animation-name: pk-pop; animation-duration: 700ms; animation-timing-function: var(--spring-bouncy); }
+.pk-setup > :nth-child(2) { animation-delay: 60ms; }
+.pk-setup > :nth-child(3) { animation-delay: 110ms; }
+.pk-setup > :nth-child(4) { animation-delay: 160ms; }
+.pk-glass.pk-setup { animation: pk-card 600ms var(--ease-out) backwards; }
+@keyframes pk-rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } }
+@keyframes pk-pop { from { opacity: 0; transform: scale(.7) rotate(-8deg); } }
+@keyframes pk-card { from { opacity: 0; transform: translateY(16px) scale(.98); } }
+.pk-empty { animation: pk-card 500ms var(--ease-out) backwards; }
+
+/* Arama ekranı */
+.pk-call { animation: pk-call-in 380ms var(--ease-out); }
+@keyframes pk-call-in { from { opacity: 0; transform: scale(1.04); } }
+.pk-call-head, .pk-call-controls { animation: pk-rise 480ms var(--ease-out) 80ms backwards; }
+.pk-call-controls { animation-delay: 160ms; }
+.pk-call-status { transition: opacity 200ms ease; }
+.pk-call-head .astryx-avatar { position: relative; }
+.pk-call.ringing .pk-call-head .astryx-avatar::before, .pk-call.ringing .pk-call-head .astryx-avatar::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35);
+  animation: pk-ring 2.4s var(--ease-out) infinite; pointer-events: none;
+}
+.pk-call.ringing .pk-call-head .astryx-avatar::after { animation-delay: 1.2s; }
+@keyframes pk-ring { from { transform: scale(1); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
+.pk-call.incoming .pk-cbtn.green .pk-cbtn-circle { animation: pk-nudge 1.6s var(--ease-in-out) infinite; }
+@keyframes pk-nudge { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+.pk-local { transition: transform 400ms var(--ease-in-out); }
+
+/* Tema değişimi: dokunulan noktadan dairesel açılım (View Transitions) */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { z-index: 2; }
+
+/* Hareket azaltma: konum/ölçek hareketleri kalkar, saydamlık geçişleri kalır */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; }
+  .pk-ready .astryx-chat-message, .pk-context, .pk-send.astryx-button, .astryx-chat-message-bubble { transform: none !important; transition-property: opacity !important; }
+  @starting-style { .pk-ready .astryx-chat-message { transform: none; filter: none; } }
+}

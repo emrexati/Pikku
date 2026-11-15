@@ -111,6 +111,8 @@ function Chat() {
   const [viewer, setViewer] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fileRef = useRef(null);
+  // İlk yüklemedeki mesajlar canlanmasın; sonradan gelenler canlansın
+  useEffect(() => { const t = setTimeout(() => document.documentElement.classList.add('pk-ready'), 700); return () => { clearTimeout(t); document.documentElement.classList.remove('pk-ready'); }; }, []);
 
   const name = S.peerName || 'Pikku';
   const status = core.peerStatus();
@@ -170,7 +172,7 @@ function Chat() {
           <Avatar name={name} size={44} tooltip={false} status={online ? <AvatarStatusDot variant="success" label="Çevrimiçi" /> : undefined} />
           <div className="pk-peer-text">
             <span className="pk-peer-name">{name}{S.ttl > 0 && <Icon icon={TimerIcon} size="sm" color="accent" label="Otomatik silme açık" />}</span>
-            <span className={'pk-peer-status' + (online ? ' on' : '')}>{status}</span>
+            <span key={status} className={'pk-peer-status' + (online ? ' on' : '')}>{status}</span>
           </div>
         </div>
         <div className="pk-top-actions">

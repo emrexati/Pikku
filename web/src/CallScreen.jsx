@@ -46,7 +46,7 @@ export function CallScreen() {
   const localOn = Call.video && !!Call.local && !Call.camOff;
 
   return (
-    <div className={'pk-call' + (remoteOn ? ' video-on' : '')} role="dialog" aria-label="Arama">
+    <div className={'pk-call' + (remoteOn ? ' video-on' : '') + (Call.state === 'incoming' ? ' incoming' : '') + (Call.state === 'incoming' || Call.state === 'outgoing' ? ' ringing' : '')} role="dialog" aria-label="Arama">
       <audio ref={audioRef} autoPlay hidden />
       {remoteOn && <Stream stream={Call.remote} muted className="pk-remote" />}
       {localOn && <Stream stream={Call.local} muted version={Call.localVersion} className={'pk-local' + (Call.facing !== 'user' ? ' back' : '')} />}
