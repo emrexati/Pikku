@@ -309,7 +309,7 @@ async function post(env, cache = true, keepalive = false) {
 // İki taraf da ikisini birden dinlediği için mesaj hangisinden giderse gitsin ulaşır.
 async function viaRelays(fn, upload = false) {
   const limited = S.primaryLimited && Date.now() - S.primaryLimited < 600000;
-  const all = S.relays.filter(r => !upload || !r.pikku);
+  const all = S.relays;
   const list = limited ? [...all.slice(1), all[0]].filter(Boolean) : all;
   let err;
   for (const r of list) {
@@ -549,7 +549,8 @@ function startRelay() {
   if (!S.config || !room.key) return;
   const up = new Map();
   for (const server of relayServers()) {
-    const r = new Relay(server, room.topic, LS.get(sinceKey(server)) || '12h');
+    // Pikku sunucusu mesajları 7 gün, ntfy 12 saat saklar
+    const r = new Relay(server, room.topic, LS.get(sinceKey(server)) || (server === PIKKU_SERVER ? '168h' : '12h'));
     r.onState = ok => { const was = S.connected; up.set(server, ok); S.connected = [...up.values()].some(Boolean) || Direct.open; if (S.connected && !was) sendPresence(true, true); if (S.connected !== was) emit(); };
     r.onMessage = (id, body) => { LS.set(sinceKey(server), id); receive(body); };
     S.relays.push(r); r.start();

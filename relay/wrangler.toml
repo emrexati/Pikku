@@ -11,3 +11,8 @@ class_name = "Room"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+# Fotoğraf ve videolar (şifreli) — 7 gün saklanır
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "pikku-media"

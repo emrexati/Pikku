@@ -2,15 +2,18 @@
 // ntfy'nin Pikku'nun kullandığı küçük bir alt kümesini konuşur:
 //   GET  /<konu>/ws?since=<id|12h|all>   → WebSocket; önce {"event":"open"}, sonra bekleyen ve yeni mesajlar
 //   POST /<konu>[?cache=no]               → mesaj yayınla (cache=no: saklama, yalnızca o an bağlı olanlara ilet)
-// Mesajlar istemcide uçtan uca şifrelenir; sunucu yalnızca okunamaz metin görür ve 12 saat sonra siler.
+//   PUT  /<konu>?filename=m.bin            → şifreli dosya yükle (R2), {attachment:{url}} döner
+//   GET  /f/<konu>/<ad>                     → şifreli dosyayı indir
+// Mesajlar ve dosyalar istemcide uçtan uca şifrelenir; sunucu yalnızca okunamaz veri görür ve 7 gün sonra siler.
 // Her konu kendi Durable Object'inde yaşar; bağlantılar "uyuyabilir" (hibernation), boşta ücret ve kota harcamaz.
 import { DurableObject } from 'cloudflare:workers';
 
-const KEEP_MS = 12 * 60 * 60 * 1000;
+const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_FILE = 30 * 1024 * 1024;
 const MAX_BODY = 8192;
-const MAX_ROWS = 2000;
+const MAX_ROWS = 20000;
 const TOPIC = /^[A-Za-z0-9_-]{1,64}$/;
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': '*', 'Access-Control-Max-Age': '86400' };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Allow-Headers': '*', 'Access-Control-Max-Age': '86400' };
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', ...CORS } });
 
 export default {
@@ -21,32 +24,67 @@ export default {
     if (parts.length === 0) return new Response('Pikku aktarma sunucusu çalışıyor.\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS } });
     if (parts[0] === 'v1' && parts[1] === 'health') return json({ healthy: true });
     if (parts[0] === 'turn' && parts.length === 1) return turn(req, env);
+    if (parts[0] === 'f' && parts.length === 3 && req.method === 'GET') return getFile(env, parts[1], parts[2]);
     const topic = parts[0];
     if (!TOPIC.test(topic)) return json({ error: 'bad topic' }, 400);
     const ws = parts[1] === 'ws';
     if (parts.length > (ws ? 2 : 1)) return json({ error: 'not found' }, 404);
     if (ws && req.headers.get('Upgrade') !== 'websocket') return json({ error: 'websocket required' }, 426);
-    if (!ws && req.method !== 'POST') return json({ error: 'attachments are not supported here' }, 405);
+    if (!ws && req.method === 'PUT') return putFile(req, env, topic, url);
+    if (!ws && req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
     return env.ROOMS.get(env.ROOMS.idFromName(topic)).fetch(req);
   }
 };
 
+// ---- Dosyalar (fotoğraf/video): R2'de, uçtan uca şifreli, 7 gün sonra silinir
+const NAME = /^[A-Za-z0-9_-]{8,64}$/;
+async function putFile(req, env, topic, url) {
+  if (!env.MEDIA) return json({ error: 'storage not configured' }, 405);
+  const len = Number(req.headers.get('Content-Length') || 0);
+  if (len > MAX_FILE) return json({ error: 'too large' }, 413);
+  const body = await req.arrayBuffer();
+  if (!body.byteLength) return json({ error: 'empty' }, 400);
+  if (body.byteLength > MAX_FILE) return json({ error: 'too large' }, 413);
+  const name = crypto.randomUUID().replace(/-/g, '');
+  await env.MEDIA.put(`${topic}/${name}`, body, { httpMetadata: { contentType: 'application/octet-stream' } });
+  // Süresi dolanları ara sıra temizle (ayrı bir zamanlayıcıya gerek kalmasın)
+  try {
+    const old = Date.now() - KEEP_MS, list = await env.MEDIA.list({ prefix: topic + '/', limit: 200 });
+    const dead = list.objects.filter(o => o.uploaded.getTime() < old).map(o => o.key);
+    if (dead.length) await env.MEDIA.delete(dead);
+  } catch {}
+  const expires = Math.floor((Date.now() + KEEP_MS) / 1000);
+  return json({ event: 'message', attachment: { name: 'm.bin', url: `${url.origin}/f/${topic}/${name}`, size: body.byteLength, expires } });
+}
+async function getFile(env, topic, name) {
+  if (!env.MEDIA || !TOPIC.test(topic) || !NAME.test(name)) return json({ error: 'not found' }, 404);
+  const obj = await env.MEDIA.get(`${topic}/${name}`);
+  if (!obj) return json({ error: 'not found' }, 404);
+  if (obj.uploaded.getTime() < Date.now() - KEEP_MS) { await env.MEDIA.delete(`${topic}/${name}`); return json({ error: 'expired' }, 410); }
+  return new Response(obj.body, { headers: { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'private, max-age=604800, immutable', ...CORS } });
+}
+
 // Görüntülü/sesli arama için kısa ömürlü TURN bilgisi (Cloudflare Realtime TURN).
 // İki cihaz arasında doğrudan yol bulunamadığında görüşme bu sunucu üzerinden aktarılır.
-// Anahtarlar Worker ayarlarında gizli değişken olarak durur: TURN_KEY_ID, TURN_KEY_API_TOKEN
+// Anahtarlar Worker ayarlarında gizli değişken olarak durur (Cloudflare: TURN_KEY_ID + TURN_KEY_API_TOKEN; Metered: METERED_TURN_URL)
 const ALLOWED_ORIGINS = [/^https:\/\/emrexati\.github\.io$/, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
 let turnCache = null;
 async function turn(req, env) {
   const origin = req.headers.get('Origin') || '';
   if (origin && !ALLOWED_ORIGINS.some(r => r.test(origin))) return json({ error: 'forbidden' }, 403);
-  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return json({ iceServers: [], configured: false });
+  const cf = env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN, metered = env.METERED_TURN_URL;
+  if (!cf && !metered) return json({ iceServers: [], configured: false });
   const now = Date.now();
   if (!turnCache || turnCache.until < now + 30 * 60e3) {
-    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
-      method: 'POST', headers: { Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ttl: 6 * 3600 })
-    });
+    // İki sağlayıcıdan biri: Cloudflare Realtime TURN (TURN_KEY_ID + TURN_KEY_API_TOKEN)
+    // ya da Metered Open Relay (METERED_TURN_URL: panodaki ".../api/v1/turn/credentials?apiKey=..." adresi)
+    const r = cf
+      ? await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+          method: 'POST', headers: { Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ttl: 6 * 3600 })
+        })
+      : await fetch(metered);
     if (!r.ok) return json({ iceServers: [], error: 'turn ' + r.status });
-    const o = await r.json();
+    const raw = await r.json(), o = Array.isArray(raw) ? { iceServers: raw } : raw;
     // Tarayıcıların yavaşladığı 53 numaralı bağlantı noktasını çıkar
     const servers = (o.iceServers || []).map(s => ({ ...s, urls: [].concat(s.urls).filter(u => !/:53(\?|$)/.test(u)) })).filter(s => s.urls.length);
     turnCache = { until: now + 6 * 3600e3, iceServers: servers };
