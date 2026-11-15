@@ -79,7 +79,7 @@ export function Settings({ isOpen, onClose }) {
 
         <Group title="Görünüm">
           <div className="pk-pad">
-            <SegmentedControl label="Görünüm" value={String(t.mode)} onChange={v => core.setTheme({ mode: Number(v) })} layout="fill">
+            <SegmentedControl label="Görünüm" value={String(t.mode)} onChange={v => core.setTheme({ mode: Number(v) })} layout="fill" isDisabled={!!core.WALLS[t.wallpaper]?.preset} disabledMessage="Çizimli temalar kendi açık/koyu görünümünü kullanır">
               <SegmentedControlItem value="0" label="Sistem" />
               <SegmentedControlItem value="1" label="Açık" />
               <SegmentedControlItem value="2" label="Koyu" />

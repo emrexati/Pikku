@@ -202,7 +202,12 @@ function paintWall(canvas, index, dark) {
 export const defaultTheme = () => ({ mode: 0, accent: 0x007AFF, myBubble: null, myText: null, theirBubble: null, theirText: null, fontSize: 17, wallpaper: 9 });
 export let theme = (() => { try { return { ...defaultTheme(), ...JSON.parse(LS.get('theme') || '{}') }; } catch { return defaultTheme(); } })();
 export const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-export const isDark = () => theme.mode === 2 || (theme.mode === 0 && darkQuery.matches);
+// Çizimli temalar kendi açık/koyu görünümünü zorunlu kılar; yoksa yazılar arka planda kaybolur
+export const isDark = () => {
+  const p = WALLS[theme.wallpaper]?.preset;
+  if (p) return p.mode === 2;
+  return theme.mode === 2 || (theme.mode === 0 && darkQuery.matches);
+};
 const THEME_KEYS = ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText', 'wallpaper'];
 export const isClassic = () => { const d = defaultTheme(); return THEME_KEYS.every(k => theme[k] === d[k]); };
 export const presetActive = i => { const p = WALLS[i]?.preset; return !!p && theme.wallpaper === i && THEME_KEYS.slice(0, 6).every(k => theme[k] === p[k]); };

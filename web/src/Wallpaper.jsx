@@ -15,7 +15,13 @@ export function Wallpaper() {
     addEventListener('resize', onResize);
     return () => { removeEventListener('resize', onResize); clearTimeout(t); };
   }, [index, dark]);
-  return <canvas ref={ref} className="pk-wallpaper" aria-hidden="true" />;
+  const themed = !!core.WALLS[index]?.preset;
+  return (
+    <>
+      <canvas ref={ref} className="pk-wallpaper" aria-hidden="true" />
+      {themed && <div className={'pk-scrim' + (dark ? ' dark' : '')} aria-hidden="true" />}
+    </>
+  );
 }
 
 // Ayarlardaki küçük önizlemeler için

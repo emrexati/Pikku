@@ -35,7 +35,7 @@ export default function App() {
   useCore();
   const [ready, setReady] = useState(false);
   useEffect(() => { core.init().then(() => setReady(true)); }, []);
-  const mode = core.theme.mode === 1 ? 'light' : core.theme.mode === 2 ? 'dark' : 'system';
+  const mode = core.isDark() ? 'dark' : 'light';
   return (
     <InternationalizationProvider locale="tr-TR" messages={{ 'tr-TR': trTR }}>
       <Theme theme={neutralTheme} mode={mode}>
@@ -57,7 +57,7 @@ function ToastBridge() {
 function Unsupported() {
   return (
     <div className="pk-center">
-      <EmptyState title="Tarayıcın desteklenmiyor" description="Pikku için güncel Safari, Chrome, Edge veya Firefox gerekiyor." />
+      <div className="pk-glass"><EmptyState title="Tarayıcın desteklenmiyor" description="Pikku için güncel Safari, Chrome, Edge veya Firefox gerekiyor." /></div>
     </div>
   );
 }
@@ -75,7 +75,7 @@ function Setup() {
   };
   return (
     <div className="pk-center pk-scroll">
-      <div className="pk-setup">
+      <div className="pk-setup pk-glass">
         <img className="pk-setup-logo" src="icon-192.png" alt="" />
         <Heading level={1} justify="center">Pikku</Heading>
         <Text type="supporting" as="p" justify="center" display="block">Yalnızca ikiniz için. Mesajlar, dosyalar ve aramalar uçtan uca şifreli.</Text>
@@ -180,7 +180,7 @@ function Chat() {
       <div className="pk-chat">
         <ChatLayout
           composer={composer}
-          emptyState={<EmptyState icon={<Icon icon={LockIcon} size="lg" />} title="Henüz mesaj yok" description="Karşı taraf aynı eşleşme koduyla giriş yaptığında mesajlarınız birbirine ulaşır." />}
+          emptyState={<div className="pk-glass pk-empty"><EmptyState icon={<Icon icon={LockIcon} size="lg" />} title="Henüz mesaj yok" description="Karşı taraf aynı eşleşme koduyla giriş yaptığında mesajlarınız birbirine ulaşır." /></div>}
         >
           {rows.length ? (
             <ChatMessageList>
