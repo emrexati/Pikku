@@ -16,7 +16,7 @@ import { ContextMenu } from '@astryxdesign/core/ContextMenu';
 import { Lightbox } from '@astryxdesign/core/Lightbox';
 import { useToast } from '@astryxdesign/core/Toast';
 import {
-  ChatLayout, ChatMessageList, ChatMessage, ChatMessageBubble, ChatMessageMetadata,
+  ChatLayout, ChatMessageList, ChatMessage, ChatMessageBubble,
   ChatSystemMessage, ChatComposerInput, ChatSendButton
 } from '@astryxdesign/core/Chat';
 import * as core from './core.js';
@@ -26,7 +26,7 @@ import { CallScreen } from './CallScreen.jsx';
 import { Wallpaper } from './Wallpaper.jsx';
 import {
   GearIcon, VideoIcon, PhoneIcon, PlusIcon, ReplyIcon, PencilIcon, CopyIcon, TrashIcon,
-  RetryIcon, TimerIcon, PlayIcon, LockIcon, DownIcon, UpIcon
+  RetryIcon, TimerIcon, PlayIcon, LockIcon, DownIcon, UpIcon, ClockIcon, AlertIcon
 } from './icons.jsx';
 
 
@@ -134,7 +134,7 @@ function Chat() {
   const context = editing || replying;
   const canSend = !!draft.trim();
   const composer = (
-    <div className="pk-composer">
+    <div className="pk-composer"><div className="pk-compose-card">
       {context && (
         <div className="pk-context">
           <span className="pk-context-bar" />
@@ -154,7 +154,7 @@ function Chat() {
         </div>
         <ChatSendButton onSend={() => submit()} isDisabled={!canSend} size="sm" className="pk-send" />
       </div>
-    </div>
+    </div></div>
   );
 
   const rows = useMemo(() => buildRows(S.messages), [core.getVersion()]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -184,12 +184,15 @@ function Chat() {
         >
           {rows.length ? (
             <ChatMessageList>
-              {rows.map(r => r.type === 'day'
-                ? <ChatSystemMessage key={r.key} variant="divider">{r.label}</ChatSystemMessage>
-                : r.type === 'sys'
-                  ? <ChatSystemMessage key={r.key}>{r.m.text} · {core.timeFmt.format(new Date(r.m.date * 1000))}</ChatSystemMessage>
-                  : <MessageRow key={r.key} m={r.m} group={r.group} showMeta={r.showMeta}
-                      onReply={m => { setReplying(m); setEditing(null); }} onEdit={startEdit} onOpen={setViewer} />)}
+              {groupByDay(rows).map(g => (
+                <div key={g.key} className="pk-day-group">
+                  <div className="pk-day" role="separator"><span>{g.label}</span></div>
+                  {g.items.map(r => r.type === 'sys'
+                    ? <ChatSystemMessage key={r.key}>{r.m.text} · {core.timeFmt.format(new Date(r.m.date * 1000))}</ChatSystemMessage>
+                    : <MessageRow key={r.key} m={r.m} group={r.group}
+                        onReply={m => { setReplying(m); setEditing(null); }} onEdit={startEdit} onOpen={setViewer} />)}
+                </div>
+              ))}
             </ChatMessageList>
           ) : null}
         </ChatLayout>
@@ -200,6 +203,16 @@ function Chat() {
       <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
+}
+
+// Gün etiketinin yalnızca kendi gününün mesajları boyunca yapışık kalması için
+function groupByDay(rows) {
+  const out = [];
+  for (const r of rows) {
+    if (r.type === 'day') out.push({ key: r.key, label: r.label, items: [] });
+    else out[out.length - 1]?.items.push(r);
+  }
+  return out;
 }
 
 const preview = m => (m.media ? (m.media.kind === 'video' ? 'Video' : 'Fotoğraf') : m.text);
@@ -222,9 +235,16 @@ function buildRows(list) {
   return rows;
 }
 
-const STATUS = { sending: 'sending', sent: 'sent', read: 'read', failed: 'error' };
+function DoubleCheck({ read, single }) {
+  return (
+    <svg className={'pk-ticks' + (read ? ' read' : '')} viewBox="0 0 18 12" width="17" height="11" aria-hidden="true">
+      <path d="M1.5 6.5l3.2 3.2L11 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      {!single && <path d="M7.6 9.2l.5.5L14.5 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />}
+    </svg>
+  );
+}
 
-function MessageRow({ m, group, showMeta, onReply, onEdit, onOpen }) {
+function MessageRow({ m, group, onReply, onEdit, onOpen }) {
   const time = core.timeFmt.format(new Date(m.date * 1000));
   const items = [
     { label: 'Yanıtla', icon: <Icon icon={ReplyIcon} />, onClick: () => onReply(m) },
@@ -235,10 +255,19 @@ function MessageRow({ m, group, showMeta, onReply, onEdit, onOpen }) {
     { label: 'Benden sil', icon: <Icon icon={TrashIcon} />, variant: 'destructive', onClick: () => core.deleteForMe(m) },
     { label: 'Herkesten sil', icon: <Icon icon={TrashIcon} />, variant: 'destructive', onClick: () => core.deleteForAll(m) }
   ];
-  const footer = (m.edited || m.expiresAt) ? (
-    <span className="pk-meta-extra">{m.expiresAt && <Icon icon={TimerIcon} size="xsm" />}{m.edited && 'düzenlendi'}</span>
-  ) : undefined;
-  const metadata = showMeta ? <ChatMessageMetadata timestamp={time} footer={footer} status={m.mine ? STATUS[m.status] : undefined} /> : undefined;
+  const ticks = !m.mine ? null
+    : m.status === 'sending' ? <Icon icon={ClockIcon} size="xsm" />
+    : m.status === 'failed' ? <Icon icon={AlertIcon} size="xsm" label="Gönderilemedi" />
+    : m.status === 'read' ? <DoubleCheck read /> : <DoubleCheck single />;
+  const meta = (
+    <span className={'pk-meta' + (m.media ? ' on-media' : '')} aria-label={`${time}${m.mine ? ' · ' + ({ sending: 'Gönderiliyor', sent: 'Gönderildi', read: 'Okundu', failed: 'Gönderilemedi' }[m.status] || '') : ''}`}>
+      {m.expiresAt && <Icon icon={TimerIcon} size="xsm" />}
+      {m.edited && <span>düzenlendi</span>}
+      <span>{time}</span>
+      {ticks}
+    </span>
+  );
+  const tail = group === undefined || group === 'last';
   const click = () => {
     if (m.status === 'failed' || m.mediaState === 'failed') core.retry(m);
   };
@@ -246,10 +275,13 @@ function MessageRow({ m, group, showMeta, onReply, onEdit, onOpen }) {
   return (
     <ContextMenu items={items} presentation="adaptive" label="Mesaj işlemleri" menuWidth="210px">
       <ChatMessage sender={m.mine ? 'user' : 'assistant'}>
-        <ChatMessageBubble group={group} metadata={metadata} variant={m.media ? 'ghost' : 'filled'} onClick={click} className={m.media ? 'pk-media-bubble' : undefined}>
+        <ChatMessageBubble group={group} variant={m.media ? 'ghost' : 'filled'} onClick={click}
+          className={(m.media ? 'pk-media-bubble' : '') + (tail && !m.media ? ' pk-tail' : '')}>
           <span id={'pk-' + m.id} className="pk-anchor" />
           {m.replyTo && <Quote m={m} />}
-          {m.media ? <MediaThumb m={m} onOpen={onOpen} /> : <span className="pk-text">{m.text}</span>}
+          {m.media
+            ? <div className="pk-media-wrap"><MediaThumb m={m} onOpen={onOpen} />{meta}</div>
+            : <span className="pk-text">{m.text}{meta}</span>}
         </ChatMessageBubble>
       </ChatMessage>
     </ContextMenu>

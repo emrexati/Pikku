@@ -21,3 +21,5 @@ export const PlayIcon = props => <svg viewBox="0 0 24 24" width="1em" height="1e
 export const LockIcon = mk(<><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></>);
 export const DownIcon = mk(<path d="M12 4v14M6 12l6 6 6-6" />);
 export const UpIcon = mk(<path d="M12 20V6M6 12l6-6 6 6" />);
+export const ClockIcon = mk(<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>);
+export const AlertIcon = mk(<><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.5v.3" /></>);
