@@ -139,11 +139,13 @@ class Relay {
   later() { this.ws = null; const d = this.retry; this.retry = Math.min(this.retry * 2, 30); setTimeout(() => { if (!this.stopped && !this.ws) this.connect(); }, d * 1000); }
   async publish(body, cache = true, keepalive = false) {
     const r = await fetch(this.server + '/' + this.topic + (cache ? '' : '?cache=no'), { method: 'POST', body, keepalive, referrerPolicy: 'no-referrer' });
+    if (r.status === 429) throw new Error('limit');
     if (!r.ok) throw new Error('server');
   }
   async upload(u8, topic) {
     const r = await fetch(this.server + '/' + topic + '?filename=m.bin', { method: 'PUT', body: u8 });
     if (r.status === 413) throw new Error('tooLarge');
+    if (r.status === 429) throw new Error('limit');
     if (!r.ok) throw new Error('server');
     const o = await r.json();
     if (!o.attachment?.url) throw new Error('bad');
@@ -275,9 +277,25 @@ async function post(env, cache = true, keepalive = false) {
     let e = env, sealed = await room.seal(e);
     if (sealed.length > 3900 && e.media?.thumb) { e = { ...e, media: { ...e.media } }; delete e.media.thumb; sealed = await room.seal(e); }
     if (sealed.length > 4000) return false;
-    await S.relay.publish(sealed, cache, keepalive);
-    return true;
+    return await viaRelays(r => r.publish(sealed, cache, keepalive));
   } catch { return false; }
+}
+// Önce ana sunucu, olmazsa (kota dolu ya da erişilemiyor) yedek sunucu denenir.
+// İki taraf da ikisini birden dinlediği için mesaj hangisinden giderse gitsin ulaşır.
+async function viaRelays(fn) {
+  const limited = S.primaryLimited && Date.now() - S.primaryLimited < 600000;
+  const list = (limited ? [S.backup, S.relay] : [S.relay, S.backup]).filter(Boolean);
+  let err;
+  for (const r of list) {
+    try { const v = await fn(r); if (r === S.relay) S.primaryLimited = 0; return v ?? true; }
+    catch (e) { err = e; if (e.message === 'tooLarge') throw e; if (r === S.relay && e.message === 'limit') noteLimit(); }
+  }
+  throw err || new Error('server');
+}
+function noteLimit() {
+  const first = !S.primaryLimited;
+  S.primaryLimited = Date.now();
+  if (first && !S.backup) hooks.toast?.('Sunucunun günlük mesaj sınırı doldu. Ayarlar › Bağlantı bölümünden başka bir sunucu seçebilirsin.', 7000);
 }
 const fire = (env, cache = true) => { post(env, cache); };
 
@@ -374,7 +392,8 @@ async function upload(id) {
   setMedia(id, 'uploading'); setStatus(id, 'sending');
   try {
     const raw = await vault.getBytes('media:' + id); if (!raw) throw new Error('missing');
-    const url = await S.relay.upload(await room.sealData(raw), room.mediaTopic);
+    const sealedRaw = await room.sealData(raw);
+    const url = await viaRelays(r => r.upload(sealedRaw, room.mediaTopic));
     const mm = byId(id); if (!mm) return;
     mm.media.url = url; mm.mediaState = 'ready'; save(); emit(); deliver(mm);
   } catch (e) {
@@ -439,12 +458,14 @@ function appendSystem(text) {
 
 // ---------------------------------------------------------------- çevrimiçi, yazıyor, okundu
 function userTyping() {
-  if (!S.config?.showPresence || Date.now() - S.lastTypingSent < 5000) return;
+  if (!S.config?.showPresence || Date.now() - S.lastTypingSent < 8000) return;
   S.lastTypingSent = Date.now(); fire(makeEnv('typing'), false);
 }
 function sendPresence(on, force) {
   if (!S.config || (!S.config.showPresence && on)) return;
-  if (on && !force && Date.now() - S.lastPresenceSent < 40000) return;
+  // Mesaj kotasını korumak için: düzenli sinyal 4 dakikada bir, zorunlu olanlar da en sık 45 saniyede bir
+  if (on && Date.now() - S.lastPresenceSent < (force ? 45000 : 240000)) return;
+  if (!on && !S.lastPresenceSent) return;
   S.lastPresenceSent = on ? Date.now() : 0;
   post(makeEnv('presence', on ? 'on' : 'off'), false, !on);
 }
@@ -479,21 +500,31 @@ function peerStatus() {
 setInterval(() => {
   if (!S.config) return;
   if (S.active) sendPresence(true, false);
-  if (S.peerOnline && Date.now() - S.lastPeerPing > 70000) { S.peerOnline = false; S.peerTyping = false; }
+  if (S.peerOnline && Date.now() - S.lastPeerPing > 300000) { S.peerOnline = false; S.peerTyping = false; }
   const t = nowS(), expired = S.messages.filter(m => m.expiresAt && m.expiresAt <= t);
   for (const m of expired) removeMessage(m.id);
   emit();
 }, 5000);
 
 // ---------------------------------------------------------------- alma
+const BACKUP_SERVER = 'https://ntfy.envs.net';
 function startRelay() {
-  S.relay?.stop(); S.relay = null; S.connected = false;
+  S.relay?.stop(); S.backup?.stop(); S.relay = null; S.backup = null; S.connected = false;
   if (!S.config || !room.key) return;
-  const since = LS.get('since-' + room.topic) || '12h';
-  const r = new Relay(S.config.server || 'https://ntfy.sh', room.topic, since);
-  r.onState = ok => { const was = S.connected; S.connected = ok; if (ok && !was) sendPresence(true, true); emit(); };
-  r.onMessage = (id, body) => receive(id, body);
-  S.relay = r; r.start(); emit();
+  const up = { main: false, backup: false };
+  const onState = which => ok => { const was = S.connected; up[which] = ok; S.connected = up.main || up.backup; if (S.connected && !was) sendPresence(true, true); if (S.connected !== was) emit(); };
+  const primary = (S.config.server || 'https://ntfy.sh').replace(/\/+$/, '');
+  const r = new Relay(primary, room.topic, LS.get('since-' + room.topic) || '12h');
+  r.onState = onState('main');
+  r.onMessage = (id, body) => { LS.set('since-' + room.topic, id); receive(body); };
+  S.relay = r; r.start();
+  if (primary !== BACKUP_SERVER) {
+    const b = new Relay(BACKUP_SERVER, room.topic, LS.get('since2-' + room.topic) || '12h');
+    b.onState = onState('backup');
+    b.onMessage = (id, body) => { LS.set('since2-' + room.topic, id); receive(body); };
+    S.backup = b; b.start();
+  }
+  emit();
 }
 let notifyCount = 0;
 function notify(title, body) {
@@ -502,8 +533,7 @@ function notify(title, body) {
   notifyCount++; document.title = `(${notifyCount}) Pikku`;
 }
 
-async function receive(id, body) {
-  LS.set('since-' + room.topic, id);
+async function receive(body) {
   const env = await room.open(body);
   if (!env || !S.config || env.from === S.config.deviceId || S.seen.has(env.id)) return;
   S.seen.add(env.id);
@@ -759,7 +789,7 @@ export async function requestNotifications() {
 }
 
 export async function resetPairing() {
-  sendPresence(false, true); S.relay?.stop(); S.relay = null;
+  sendPresence(false, true); S.relay?.stop(); S.relay = null; S.backup?.stop(); S.backup = null;
   await clearLocal(); await db.del('config'); await db.del('room');
   for (const k of ['peerName', 'peerLastSeen', 'ttl', 'lastReadSentTs']) LS.del(k);
   location.reload();
@@ -785,11 +815,13 @@ export async function init() {
   S.ready = true; emit();
 }
 
+let offTimer = null;
 document.addEventListener('visibilitychange', () => {
   S.active = !document.hidden;
   if (!S.config) return;
-  if (S.active) { notifyCount = 0; document.title = 'Pikku'; S.relay?.reconnect(); sendPresence(true, true); scheduleRead(); }
-  else { sendPresence(false, true); S.peerTyping = false; }
+  clearTimeout(offTimer);
+  if (S.active) { notifyCount = 0; document.title = 'Pikku'; S.relay?.reconnect(); S.backup?.reconnect(); sendPresence(true, true); scheduleRead(); }
+  else { S.peerTyping = false; offTimer = setTimeout(() => { if (document.hidden) sendPresence(false, true); }, 20000); }
   emit();
 });
 
