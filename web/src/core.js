@@ -194,9 +194,10 @@ const mixBlack = (h, t) => (Math.round((h >> 16 & 255) * (1 - t)) << 16) | (Math
 // Vurgu renginden okunaklı bir "benim balonum" üretir: beyaz yazı 4.5:1 tutana kadar koyulaştırır;
 // açık renklerde (sarı, turuncu) koyu yazıya geçmek daha iyiyse onu seçer.
 export function readableBubble(accent) {
-  if (contrast(accent, 0xFFFFFF) >= 4.5) return [accent, 0xFFFFFF];
+  // Beyaz yazı için 5.4:1 hedeflenir; böylece biraz soluk saat/okundu yazısı da 4.5:1'in üstünde kalır
+  if (contrast(accent, 0xFFFFFF) >= 5.4) return [accent, 0xFFFFFF];
   if (contrast(accent, 0x111111) >= 7) return [accent, 0x111111];
-  for (let t = .04; t < .6; t += .04) { const d = mixBlack(accent, t); if (contrast(d, 0xFFFFFF) >= 4.5) return [d, 0xFFFFFF]; }
+  for (let t = .04; t < .6; t += .04) { const d = mixBlack(accent, t); if (contrast(d, 0xFFFFFF) >= 5.4) return [d, 0xFFFFFF]; }
   return [mixBlack(accent, .6), 0xFFFFFF];
 }
 
@@ -219,7 +220,7 @@ function paintWall(canvas, index, dark) {
 
 
 // ---------------------------------------------------------------- tema durumu
-export const defaultTheme = () => ({ mode: 0, accent: 0x007AFF, myBubble: null, myText: null, theirBubble: null, theirText: null, fontSize: 17, wallpaper: 9 });
+export const defaultTheme = () => ({ mode: 0, accent: 0x007AFF, myBubble: null, myText: null, theirBubble: null, theirText: null, fontSize: 17, wallpaper: 9, glass: true });
 export let theme = (() => { try { return { ...defaultTheme(), ...JSON.parse(LS.get('theme') || '{}') }; } catch { return defaultTheme(); } })();
 export const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 // Çizimli temalar kendi açık/koyu görünümünü zorunlu kılar; yoksa yazılar arka planda kaybolur
@@ -235,6 +236,7 @@ export const presetActive = i => { const p = WALLS[i]?.preset; return !!p && the
 export function applyTheme() {
   const root = document.documentElement, dark = isDark(), s = root.style;
   root.toggleAttribute('data-dark', dark);
+  root.toggleAttribute('data-glass', theme.glass !== false); // üst ve alt çubuklarda Liquid Glass
   s.colorScheme = dark ? 'dark' : 'light';
   // Açık zeminde vurgu rengi yazı/simge olarak da okunmalı: gerekiyorsa koyulaştırılmış bir "mürekkep" türetilir
   const inkFor = min => { if (dark) return theme.accent; let h = theme.accent; for (let t = .04; contrast(h, 0xFFFFFF) < min && t < .7; t += .04) h = mixBlack(theme.accent, t); return h; };
@@ -245,11 +247,11 @@ export function applyTheme() {
   s.setProperty('--pk-fs', theme.fontSize + 'px');
   const setOpt = (name, v, meta) => {
     if (v == null) { s.removeProperty(name); if (meta) s.removeProperty(meta); }
-    else { s.setProperty(name, toHex(v)); if (meta) s.setProperty(meta, css(v, .8)); }
+    else { s.setProperty(name, toHex(v)); if (meta) s.setProperty(meta, css(v, .9)); }
   };
   const [bub, ink] = readableBubble(theme.accent);
   s.setProperty('--pk-my-bubble-default', toHex(bub)); s.setProperty('--pk-my-text-default', toHex(ink));
-  s.setProperty('--pk-my-meta-default', css(ink, .82)); s.setProperty('--pk-on-accent', contrast(theme.accent, 0xFFFFFF) >= 3 ? '#FFFFFF' : '#111111');
+  s.setProperty('--pk-my-meta-default', css(ink, .9)); s.setProperty('--pk-on-accent', contrast(theme.accent, 0xFFFFFF) >= 3 ? '#FFFFFF' : '#111111');
   setOpt('--pk-my-bubble', theme.myBubble); setOpt('--pk-my-text', theme.myText, '--pk-my-meta');
   setOpt('--pk-their-bubble', theme.theirBubble); setOpt('--pk-their-text', theme.theirText, '--pk-their-meta');
   const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = dark ? '#000000' : '#FFFFFF';

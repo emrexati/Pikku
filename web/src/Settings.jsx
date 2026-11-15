@@ -87,11 +87,14 @@ export function Settings({ isOpen, onClose }) {
             </SegmentedControl>
           </div>
           <div className="pk-pad">
+            <Switch label="Liquid Glass çubuklar" description="Üst bilgi ve mesaj kutusu, arkasındaki sohbeti kırarak gösteren cam görünümünde olur." value={t.glass !== false} onChange={v => core.setTheme({ glass: v })} labelPosition="start" labelSpacing="spread" width="100%" />
+          </div>
+          <div className="pk-pad">
             <Text display="block">Vurgu rengi</Text>
             <div className="pk-swatches">
-              {core.ACCENTS.map(h => (
+              {core.ACCENTS.map((h, i) => (
                 <button key={h} type="button" className={'pk-swatch' + (h === t.accent ? ' on' : '')} style={{ background: core.toHex(h) }}
-                  aria-label="Vurgu rengi" aria-pressed={h === t.accent} onClick={() => core.setTheme({ accent: h })} />
+                  aria-label={'Vurgu rengi: ' + ACCENT_NAMES[i]} aria-pressed={h === t.accent} onClick={() => core.setTheme({ accent: h })} />
               ))}
             </div>
           </div>
@@ -206,6 +209,8 @@ function ContrastWarning() {
     </div>
   );
 }
+
+const ACCENT_NAMES = ['Mavi', 'Yeşil', 'Çivit', 'Turuncu', 'Pembe', 'Kırmızı', 'Turkuaz', 'Gri'];
 
 function ColorRow({ label, k, fallback }) {
   const v = core.theme[k];

@@ -50,7 +50,7 @@ export default function App() {
 
 function ToastBridge() {
   const show = useToast();
-  useEffect(() => { core.hooks.toast = (body, ms) => show({ body, autoHideDuration: ms || 3500, uniqueID: String(body) }); return () => { core.hooks.toast = null; }; }, [show]);
+  useEffect(() => { core.hooks.toast = (body, ms, opts = {}) => show({ body, autoHideDuration: ms || 3500, uniqueID: opts.uniqueID || String(body), ...opts }); return () => { core.hooks.toast = null; }; }, [show]);
   return null;
 }
 
@@ -79,7 +79,7 @@ function Setup() {
     try { await core.setup(name, code); } catch { core.hooks.toast?.('Bu tarayıcı gerekli şifrelemeyi desteklemiyor'); setBusy(false); }
   };
   return (
-    <div className="pk-center pk-scroll">
+    <main className="pk-center pk-scroll" aria-label="Pikku kurulumu">
       <div className="pk-setup pk-glass">
         <img className="pk-setup-logo" src="icon-192.png" alt="" />
         <Heading level={1} justify="center">Pikku</Heading>
@@ -103,7 +103,7 @@ function Setup() {
           <Text type="supporting" size="sm" as="p" justify="center" display="block">iPhone'daki Pikku ile aynı kod kullanılır; ikisi birbiriyle konuşur.</Text>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -119,8 +119,9 @@ function Chat() {
   // İlk yüklemedeki mesajlar canlanmasın; sonradan gelenler canlansın
   useEffect(() => { const t = setTimeout(() => document.documentElement.classList.add('pk-ready'), 700); return () => { clearTimeout(t); document.documentElement.classList.remove('pk-ready'); }; }, []);
 
-  const name = S.peerName || 'Pikku';
-  const status = core.peerStatus();
+  const waiting = !S.peerName; // karşı taraf henüz hiç bağlanmadı
+  const name = S.peerName || 'Karşı taraf';
+  const status = waiting && !S.messages.length && S.connected ? 'henüz katılmadı' : core.peerStatus();
   const online = S.connected && S.config?.showPresence && (S.peerOnline || S.peerTyping);
 
   const submit = value => {
@@ -168,18 +169,63 @@ function Chat() {
     </div></div>
   );
 
-  const rows = useMemo(() => buildRows(S.messages), [core.getVersion()]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Silme 5 sn bekletilir; bu sürede "Geri al" ile vazgeçilebilir
+  const [hidden, setHidden] = useState(() => new Set());
+  const removeHidden = id => setHidden(s => { const n = new Set(s); n.delete(id); return n; });
+  const del = (m, forAll) => {
+    setHidden(s => new Set(s).add(m.id));
+    let dismiss = null;
+    const commit = () => { pendingDeletes.delete(m.id); (forAll ? core.deleteForAll : core.deleteForMe)(m); removeHidden(m.id); };
+    const timer = setTimeout(commit, 5000);
+    pendingDeletes.set(m.id, () => { clearTimeout(timer); commit(); });
+    const undo = () => { clearTimeout(timer); pendingDeletes.delete(m.id); removeHidden(m.id); dismiss?.(); };
+    dismiss = core.hooks.toast?.(forAll ? 'Mesaj iki taraftan da silinecek' : 'Mesaj silindi', 5000, {
+      uniqueID: 'del-' + m.id,
+      endContent: <Button label="Geri al" variant="ghost" size="sm" onClick={undo} />
+    });
+  };
+  const reply = m => { setReplying(m); setEditing(null); };
+
+  // Tek seferlik ipucu: kaydırarak yanıtlama ve basılı tutma menüsü
+  useEffect(() => {
+    if (!S.messages.some(m => !m.system) || localStorage.getItem('pk-hint-swipe')) return;
+    const t = setTimeout(() => { localStorage.setItem('pk-hint-swipe', '1'); core.hooks.toast?.('İpucu: Yanıtlamak için mesajı sola kaydır. Kopyalama, düzenleme ve silme için basılı tut.', 7000); }, 1500);
+    return () => clearTimeout(t);
+  }, [S.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 3: Yapışkan gün etiketi yalnızca kaydırırken görünür; durunca mesajların üstünden çekilir
+  useEffect(() => {
+    const root = document.querySelector('.pk-chat'); if (!root) return;
+    let timer = null;
+    const mark = sc => {
+      const lim = (document.querySelector('.pk-top')?.getBoundingClientRect().bottom || 0) + 16;
+      for (const d of sc.querySelectorAll('.pk-day')) d.toggleAttribute('data-stuck', d.getBoundingClientRect().top <= lim);
+    };
+    const onScroll = e => {
+      const sc = e.target; if (!(sc instanceof Element)) return;
+      root.setAttribute('data-scrolling', ''); mark(sc);
+      clearTimeout(timer); timer = setTimeout(() => { root.removeAttribute('data-scrolling'); mark(sc); }, 1000);
+    };
+    root.addEventListener('scroll', onScroll, true);
+    const log = root.querySelector('[role="log"]'); if (log) mark(log);
+    return () => { root.removeEventListener('scroll', onScroll, true); clearTimeout(timer); };
+  });
+
+  const rows = useMemo(() => buildRows(S.messages.filter(m => !hidden.has(m.id))), [core.getVersion(), hidden]); // eslint-disable-line react-hooks/exhaustive-deps
   const media = viewer && viewer.url ? { src: viewer.url, alt: viewer.video ? 'Video' : 'Fotoğraf', type: viewer.video ? 'video' : 'image' } : null;
 
   return (
     <div className="pk-app">
       <header className="pk-top">
-        <button type="button" className="pk-peer" onClick={openSettings} aria-label={`${name} · Ayarları aç`}>
-          <Avatar name={name} size={44} tooltip={false} status={online ? <AvatarStatusDot variant="success" label="Çevrimiçi" /> : undefined} />
+        <button type="button" className="pk-peer" onClick={openSettings}>
+          {waiting
+            ? <span className="pk-avatar-wait" aria-hidden="true"><Icon icon={LockIcon} size="md" /></span>
+            : <Avatar name={name} size={44} tooltip={false} status={online ? <AvatarStatusDot variant="success" label="Çevrimiçi" /> : undefined} />}
           <div className="pk-peer-text">
             <span className="pk-peer-name">{name}{S.ttl > 0 && <Icon icon={TimerIcon} size="sm" color="accent" label="Otomatik silme açık" />}</span>
             <span key={status} className={'pk-peer-status' + (online ? ' on' : '')}>{status}</span>
           </div>
+          <span className="pk-sr"> · Ayarlar</span>
         </button>
         <div className="pk-top-actions">
           <IconButton label="Görüntülü ara" variant="ghost" icon={<Icon icon={VideoIcon} size="lg" />} onClick={() => Call.start(true)} />
@@ -189,7 +235,8 @@ function Chat() {
         </div>
       </header>
 
-      <div className="pk-chat">
+      <main className="pk-chat" aria-label="Sohbet">
+        <h1 className="pk-sr">{name} ile sohbet</h1>
         <ChatLayout
           composer={composer}
           emptyState={<div className="pk-glass pk-empty"><EmptyState icon={<Icon icon={LockIcon} size="lg" />} title="Henüz mesaj yok" description="Karşı taraf aynı eşleşme koduyla giriş yaptığında mesajlarınız birbirine ulaşır." /></div>}
@@ -202,13 +249,13 @@ function Chat() {
                   {g.items.map(r => r.type === 'sys'
                     ? <ChatSystemMessage key={r.key}>{r.m.text} · {core.timeFmt.format(new Date(r.m.date * 1000))}</ChatSystemMessage>
                     : <MessageRow key={r.key} m={r.m} group={r.group}
-                        onReply={m => { setReplying(m); setEditing(null); }} onEdit={startEdit} onOpen={setViewer} />)}
+                        onReply={reply} onEdit={startEdit} onOpen={setViewer} onDelete={del} />)}
                 </div>
               ))}
             </ChatMessageList>
           ) : null}
         </ChatLayout>
-      </div>
+      </main>
 
       <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={e => { pickFiles([...e.target.files]); e.target.value = ''; }} />
       {media && <Lightbox isOpen onOpenChange={o => { if (!o) setViewer(null); }} media={media} hasZoom={!viewer.video} hasAutoPlay />}
@@ -256,7 +303,41 @@ function DoubleCheck({ read, single }) {
   );
 }
 
-function MessageRow({ m, group, onReply, onEdit, onOpen }) {
+// Bekleyen silmeler: sayfa kapanırsa hemen uygulanır
+const pendingDeletes = new Map();
+addEventListener('pagehide', () => { for (const run of [...pendingDeletes.values()]) run(); });
+
+// Mesajı sola kaydırınca yanıtla (Telegram/iMessage gibi). Dikey kaydırma bozulmaz;
+// sol kenar iOS'un geri hareketine bırakılır. Aynı işlem basılı tutma menüsünde de var.
+function SwipeToReply({ onReply, children, ...rest }) {
+  const ref = useRef(null), st = useRef(null);
+  const set = (x, anim) => {
+    const el = ref.current; if (!el) return;
+    el.style.transition = anim ? 'transform 380ms var(--spring-bouncy, ease-out)' : 'none';
+    el.style.transform = x ? `translateX(${x}px)` : '';
+    el.style.setProperty('--pk-swipe', String(Math.min(1, Math.abs(x) / 56)));
+  };
+  const down = e => { if (e.pointerType === 'mouse' || !e.isPrimary) return; st.current = { x: e.clientX, y: e.clientY, dir: null, dx: 0, fired: false }; };
+  const move = e => {
+    const s = st.current; if (!s) return;
+    const dx = s.x - e.clientX, dy = e.clientY - s.y;
+    if (!s.dir) { if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; s.dir = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.4 ? 'h' : 'v'; if (s.dir === 'h') { try { ref.current?.setPointerCapture(e.pointerId); } catch {} } }
+    if (s.dir !== 'h') return;
+    s.dx = Math.max(0, dx);
+    const x = s.dx <= 56 ? s.dx : 56 + (s.dx - 56) * 0.25; // sınırdan sonra direnç
+    if (!s.fired && s.dx > 56) { s.fired = true; navigator.vibrate?.(8); }
+    set(-x, false);
+  };
+  const up = () => { const s = st.current; st.current = null; if (!s || s.dir !== 'h') return; set(0, true); if (s.dx > 56) onReply(); };
+  return (
+    <div ref={ref} className="pk-swipe" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} {...rest}>
+      {children}
+      <span className="pk-swipe-icon" aria-hidden="true"><Icon icon={ReplyIcon} size="sm" /></span>
+    </div>
+  );
+}
+
+function MessageRow({ m, group, onReply, onEdit, onOpen, onDelete }) {
   const time = core.timeFmt.format(new Date(m.date * 1000));
   const items = [
     { label: 'Yanıtla', icon: <Icon icon={ReplyIcon} />, onClick: () => onReply(m) },
@@ -264,8 +345,8 @@ function MessageRow({ m, group, onReply, onEdit, onOpen }) {
     ...(m.mine && !m.media && m.status !== 'failed' ? [{ label: 'Düzenle', icon: <Icon icon={PencilIcon} />, onClick: () => onEdit(m) }] : []),
     ...(m.status === 'failed' || m.mediaState === 'failed' ? [{ label: 'Tekrar dene', icon: <Icon icon={RetryIcon} />, onClick: () => core.retry(m) }] : []),
     { type: 'divider' },
-    { label: 'Benden sil', icon: <Icon icon={TrashIcon} />, variant: 'destructive', onClick: () => core.deleteForMe(m) },
-    { label: 'Herkesten sil', icon: <Icon icon={TrashIcon} />, variant: 'destructive', onClick: () => core.deleteForAll(m) }
+    { label: 'Benden sil', icon: <Icon icon={TrashIcon} />, variant: 'destructive', onClick: () => onDelete(m, false) },
+    { label: 'Herkesten sil', icon: <Icon icon={TrashIcon} />, variant: 'destructive', onClick: () => onDelete(m, true) }
   ];
   const ticks = !m.mine ? null
     : m.status === 'sending' ? <Icon icon={ClockIcon} size="xsm" />
@@ -286,6 +367,7 @@ function MessageRow({ m, group, onReply, onEdit, onOpen }) {
 
   return (
     <ContextMenu items={items} presentation="adaptive" label="Mesaj işlemleri" menuWidth="210px">
+      <SwipeToReply onReply={() => onReply(m)}>
       <ChatMessage sender={m.mine ? 'user' : 'assistant'}>
         <ChatMessageBubble group={group} variant={m.media ? 'ghost' : 'filled'} onClick={click}
           className={(m.media ? 'pk-media-bubble' : '') + (tail && !m.media ? ' pk-tail' : '')}>
@@ -296,6 +378,7 @@ function MessageRow({ m, group, onReply, onEdit, onOpen }) {
             : <span className="pk-text">{m.text}{meta}</span>}
         </ChatMessageBubble>
       </ChatMessage>
+      </SwipeToReply>
     </ContextMenu>
   );
 }
