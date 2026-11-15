@@ -948,9 +948,13 @@ function confirmBox(text, label, fn) {
 }
 
 // ---------------------------------------------------------------- ayarlar
-let draft = null, codeShown = false;
+let draft = null, codeShown = false, themeBackup = null;
+const THEME_KEYS = ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText', 'wallpaper'];
+const isClassic = () => { const d = defaultTheme(); return THEME_KEYS.every(k => theme[k] === d[k]); };
+const presetActive = i => { const p = WALLS[i]?.preset; return !!p && theme.wallpaper === i && ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText'].every(k => theme[k] === p[k]); };
+function resetTheme() { const d = defaultTheme(); for (const k of THEME_KEYS) theme[k] = d[k]; saveTheme(); renderSettingsTheme(true); }
 function openSettings() {
-  draft = { ...S.config };
+  draft = { ...S.config }; themeBackup = { ...theme };
   $('#sName').value = draft.myName; $('#sPresence').checked = draft.showPresence; $('#sRead').checked = draft.readReceipts;
   $('#sNotify').checked = !!draft.notify && 'Notification' in window && Notification.permission === 'granted';
   $('#sServer').value = draft.server; $('#sTurn').value = draft.turnURL; $('#sTurnUser').value = draft.turnUser; $('#sTurnPass').value = draft.turnPass;
@@ -968,16 +972,21 @@ function renderSettingsTheme(full) {
   $('#cTheirBubble').value = rgbHex(cs.getPropertyValue('--their-bubble')); $('#cTheirText').value = rgbHex(cs.getPropertyValue('--their-text'));
   $('#accentRow').innerHTML = ACCENTS.map(h => `<button class="swatch${h === theme.accent ? ' on' : ''}" style="background:${toHex(h)}" data-h="${h}" aria-label="Vurgu rengi"></button>`).join('');
   if (full) {
-    $('#themeCards').innerHTML = WALLS.map((w, i) => w.preset ? `<button class="theme-card" data-i="${i}"><canvas></canvas>${esc(w.name)}</button>` : '').join('');
+    $('#themeCards').innerHTML = '<button class="theme-card" data-i="-1"><canvas></canvas>Klasik</button>' + WALLS.map((w, i) => w.preset ? `<button class="theme-card" data-i="${i}"><canvas></canvas>${esc(w.name)}</button>` : '').join('');
     $('#wallRow').innerHTML = WALLS.map((w, i) => w.preset ? '' : `<button class="wall" data-i="${i}"><canvas></canvas>${esc(w.name)}</button>`).join('');
     let pv = $('#colorPreview canvas'); if (!pv) { pv = document.createElement('canvas'); $('#colorPreview').prepend(pv); }
   }
-  document.querySelectorAll('#themeCards .theme-card').forEach(b => { const i = +b.dataset.i; b.classList.toggle('on', i === theme.wallpaper); paintWall(b.querySelector('canvas'), i, WALLS[i].preset.mode === 1 ? false : WALLS[i].preset.mode === 2 ? true : dark); });
+  document.querySelectorAll('#themeCards .theme-card').forEach(b => {
+    const i = +b.dataset.i;
+    if (i < 0) { b.classList.toggle('on', isClassic()); paintWall(b.querySelector('canvas'), 0, darkQuery.matches); return; }
+    b.classList.toggle('on', presetActive(i));
+    paintWall(b.querySelector('canvas'), i, WALLS[i].preset.mode === 1 ? false : WALLS[i].preset.mode === 2 ? true : dark);
+  });
   document.querySelectorAll('#wallRow .wall').forEach(b => { const i = +b.dataset.i; b.classList.toggle('on', i === theme.wallpaper); paintWall(b.querySelector('canvas'), i, dark); });
   paintWall($('#colorPreview canvas'), theme.wallpaper, dark);
 }
 $('#openSettings').onclick = openSettings;
-$('#settingsCancel').onclick = () => { $('#settings').hidden = true; };
+$('#settingsCancel').onclick = () => { if (themeBackup) { theme = { ...themeBackup }; LS.set('theme', JSON.stringify(theme)); applyTheme(); } $('#settings').hidden = true; };
 $('#settingsSave').onclick = async () => {
   const n = { ...draft };
   n.myName = $('#sName').value.trim() || S.config.myName;
@@ -1003,16 +1012,23 @@ $('#sMode').onclick = e => { const b = e.target.closest('button'); if (!b) retur
 $('#accentRow').onclick = e => { const b = e.target.closest('.swatch'); if (!b) return; theme.accent = Number(b.dataset.h); saveTheme(); };
 $('#themeCards').onclick = e => {
   const b = e.target.closest('.theme-card'); if (!b) return;
-  const i = +b.dataset.i, p = WALLS[i].preset;
+  const i = +b.dataset.i;
+  if (i < 0) return resetTheme();
+  const p = WALLS[i].preset;
   Object.assign(theme, { wallpaper: i, mode: p.mode, accent: p.accent, myBubble: p.myBubble, myText: p.myText, theirBubble: p.theirBubble, theirText: p.theirText });
   saveTheme(); renderSettingsTheme(true);
 };
-$('#wallRow').onclick = e => { const b = e.target.closest('.wall'); if (!b) return; theme.wallpaper = +b.dataset.i; saveTheme(); };
+$('#wallRow').onclick = e => {
+  const b = e.target.closest('.wall'); if (!b) return;
+  // Hazır temadan düz arka plana geçerken temanın renkleri de bırakılır
+  if (WALLS[theme.wallpaper]?.preset) { const d = defaultTheme(); for (const k of ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText']) theme[k] = d[k]; }
+  theme.wallpaper = +b.dataset.i; saveTheme(); renderSettingsTheme(true);
+};
 $('#sFont').oninput = e => { theme.fontSize = Number(e.target.value); saveTheme(); };
 for (const [id, key] of [['#cMyBubble', 'myBubble'], ['#cMyText', 'myText'], ['#cTheirBubble', 'theirBubble'], ['#cTheirText', 'theirText']]) {
   $(id).oninput = e => { theme[key] = fromHex(e.target.value); LS.set('theme', JSON.stringify(theme)); applyTheme(); };
 }
-$('#resetColors').onclick = () => { Object.assign(theme, { myBubble: null, myText: null, theirBubble: null, theirText: null }); saveTheme(); };
+$('#resetColors').onclick = resetTheme;
 $('#showCode').onclick = () => { codeShown = !codeShown; $('#sCode').textContent = codeShown ? S.config.code : '••••-••••-••••-••••'; $('#showCode').textContent = codeShown ? 'Gizle' : 'Göster'; };
 $('#copyCode2').onclick = () => navigator.clipboard?.writeText(S.config.code).then(() => toast('Kopyalandı')).catch(() => {});
 $('#clearAll').onclick = () => confirmBox('Tüm mesajlar iki cihazdan da silinsin mi?', 'İki taraftan da sil', clearForAll);
