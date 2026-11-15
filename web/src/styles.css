@@ -32,7 +32,8 @@ LAYOUT: tek sütun; buzlu üst çubuk, ortada konuşma, altta yüzen yazma alan�
   --pk-their-text-default: #FFFFFF;
 }
 html, body, #root { height: 100%; }
-body { margin: 0; background: transparent; overflow: hidden; -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: transparent; overflow: hidden; -webkit-font-smoothing: antialiased; touch-action: manipulation; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
 * { -webkit-tap-highlight-color: transparent; }
 .pk-mono, .pk-mono input { font-family: ui-monospace, "SF Mono", Menlo, monospace !important; letter-spacing: .04em; }
 .pk-secret input { -webkit-text-security: disc; }
@@ -50,21 +51,21 @@ body { margin: 0; background: transparent; overflow: hidden; -webkit-font-smooth
 /* Uygulama iskeleti */
 .pk-app { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; }
 .pk-top {
-  position: absolute; z-index: 6; top: calc(var(--pk-safe-t) + 8px); left: max(8px, calc(50% - 392px)); right: max(8px, calc(50% - 392px));
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 4px 6px; border-radius: 20px;
+  position: absolute; z-index: 6; top: calc(var(--pk-safe-t) + 8px); left: max(10px, calc(50% - 392px)); right: max(10px, calc(50% - 392px));
+  display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 8px 10px 12px; border-radius: 24px;
   background: var(--pk-bar); -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px);
   box-shadow: 0 0 0 .5px var(--pk-hair), 0 6px 24px rgba(0, 0, 0, .10); color: var(--pk-accent);
 }
 .pk-top .astryx-icon-button, .pk-top button { color: var(--pk-accent); }
-.pk-top-actions { justify-self: end; display: flex; gap: 2px; }
-.pk-peer { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--color-text-primary); }
-.pk-peer-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
-.pk-peer-name { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.pk-peer-status { font-size: 12px; color: var(--pk-label2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+.pk-top-actions { display: flex; align-items: center; gap: 0; flex: none; }
+.pk-peer { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; color: var(--color-text-primary); }
+.pk-peer-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; line-height: 1.2; }
+.pk-peer-name { font-weight: 600; font-size: 17px; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
+.pk-peer-status { font-size: 13px; color: var(--pk-label2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pk-peer-status.on { color: var(--pk-accent); }
 
 .pk-chat { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; z-index: 2; }
-.pk-chat [role="log"] { padding-top: calc(var(--pk-safe-t) + 72px); width: 100%; max-width: 800px; margin-inline: auto; }
+.pk-chat [role="log"] { padding-top: calc(var(--pk-safe-t) + 84px); width: 100%; max-width: 800px; margin-inline: auto; }
 .pk-day-group { display: flex; flex-direction: column; gap: 4px; }
 .pk-chat > * { flex: 1; min-height: 0; background: transparent !important; }
 
@@ -97,7 +98,8 @@ body { margin: 0; background: transparent; overflow: hidden; -webkit-font-smooth
 .pk-spinner { width: 22px; height: 22px; border: 2.5px solid rgba(255, 255, 255, .35); border-top-color: #fff; border-radius: 50%; animation: pk-spin .8s linear infinite; }
 @keyframes pk-spin { to { transform: rotate(360deg); } }
 
-.pk-composer { padding: 6px max(8px, calc(50% - 392px)) calc(var(--pk-safe-b) + 10px); background: transparent; }
+.pk-composer { padding: 6px max(10px, calc(50% - 392px)) max(8px, calc(var(--pk-safe-b) - 8px)); background: transparent; }
+*:has(> * > .pk-composer), *:has(> * > * > .pk-composer) { padding-bottom: 0 !important; margin-bottom: 0 !important; }
 .pk-compose-card {
   border-radius: 24px; padding: 6px; background: var(--pk-bar);
   -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px);
@@ -218,7 +220,7 @@ body { margin: 0; background: transparent; overflow: hidden; -webkit-font-smooth
 .astryx-chat-message-bubble.pk-tail[data-sender="assistant"]::after { left: -6px; clip-path: path('M11 0 C11 8 8 13 0 15 L11 15 Z'); }
 
 /* Yapışkan gün etiketleri ve sistem mesajları */
-.pk-day { position: sticky; top: calc(var(--pk-safe-t) + 70px); z-index: 3; display: flex; justify-content: center; margin: 10px 0 6px; pointer-events: none; }
+.pk-day { position: sticky; top: calc(var(--pk-safe-t) + 82px); z-index: 3; display: flex; justify-content: center; margin: 10px 0 6px; pointer-events: none; }
 .pk-day span, .astryx-chat-system-message {
   font-size: 12.5px; font-weight: 500; padding: 4px 11px; border-radius: 12px; color: var(--color-text-primary);
   background: var(--pk-bar); -webkit-backdrop-filter: saturate(180%) blur(16px); backdrop-filter: saturate(180%) blur(16px);

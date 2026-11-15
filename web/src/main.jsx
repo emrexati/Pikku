@@ -5,6 +5,11 @@ import './styles.css';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 
+// iOS Safari'de iki parmakla ve çift dokunarak yakınlaştırmayı engelle
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+let lastTouch = 0;
+document.addEventListener('touchend', e => { const now = Date.now(); if (now - lastTouch < 300 && !e.target.closest('input, textarea, [contenteditable]')) e.preventDefault(); lastTouch = now; }, { passive: false });
+
 createRoot(document.getElementById('root')).render(<App />);
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
