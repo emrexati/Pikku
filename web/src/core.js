@@ -491,7 +491,9 @@ function sendPresence(on, force) {
   if (!S.config || (!S.config.showPresence && on)) return;
   if (Direct.open) { Direct.sendPresence(on); return; }
   // Mesaj kotasını korumak için: düzenli sinyal 4 dakikada bir, zorunlu olanlar da en sık 45 saniyede bir
-  if (on && Date.now() - S.lastPresenceSent < (force === 'reply' ? 8000 : force ? 45000 : 240000)) return;
+  // 'reply': karşı taraf yeni geldi, varlığımızı hemen bildir (kendi sayacı var, en sık 8 sn'de bir)
+  if (force === 'reply') { if (Date.now() - (S.lastReplySent || 0) < 8000) return; S.lastReplySent = Date.now(); }
+  else if (on && Date.now() - S.lastPresenceSent < (force ? 45000 : 240000)) return;
   if (!on && !S.lastPresenceSent) return;
   S.lastPresenceSent = on ? Date.now() : 0;
   post(makeEnv('presence', on ? 'on' : 'off'), false, !on);
@@ -534,11 +536,12 @@ setInterval(() => {
 }, 5000);
 
 // ---------------------------------------------------------------- alma
-const DEFAULT_SERVER = 'https://ntfy.sh', BACKUP_SERVER = 'https://ntfy.envs.net';
+const PIKKU_SERVER = 'https://pikku-relay.emresati.workers.dev', DEFAULT_SERVER = 'https://ntfy.sh', BACKUP_SERVER = 'https://ntfy.envs.net';
 const clean = u => (u || '').trim().replace(/\/+$/, '');
 // Dinlenen sunucular: seçili sunucu + ntfy.sh + yedek. Mesaj seçili sunucudan gider, olmazsa sıradakinden.
 // İki taraf da hepsini dinlediği için biri farklı sunucu seçse bile mesajlar kaybolmaz.
-function relayServers() { return [...new Set([clean(S.config.server) || DEFAULT_SERVER, DEFAULT_SERVER, BACKUP_SERVER])]; }
+// Sıra: (varsa) kullanıcının kendi seçtiği sunucu, sonra Pikku'nun Cloudflare sunucusu, sonra ntfy.sh ve yedek
+function relayServers() { const own = clean(S.config.server); return [...new Set([own && own !== DEFAULT_SERVER ? own : PIKKU_SERVER, PIKKU_SERVER, DEFAULT_SERVER, BACKUP_SERVER])]; }
 function sinceKey(server) { return server === DEFAULT_SERVER ? 'since-' + room.topic : server === BACKUP_SERVER ? 'since2-' + room.topic : 'since:' + server + ':' + room.topic; }
 function startRelay() {
   for (const r of S.relays) r.stop();
