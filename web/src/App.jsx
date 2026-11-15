@@ -174,7 +174,6 @@ function Chat() {
   return (
     <div className="pk-app">
       <header className="pk-top">
-        <IconButton label="Ayarlar" variant="ghost" className="pk-gear" icon={<Icon icon={GearIcon} size="lg" />} onClick={openSettings} />
         <button type="button" className="pk-peer" onClick={openSettings} aria-label={`${name} · Ayarları aç`}>
           <Avatar name={name} size={44} tooltip={false} status={online ? <AvatarStatusDot variant="success" label="Çevrimiçi" /> : undefined} />
           <div className="pk-peer-text">
@@ -185,6 +184,8 @@ function Chat() {
         <div className="pk-top-actions">
           <IconButton label="Görüntülü ara" variant="ghost" icon={<Icon icon={VideoIcon} size="lg" />} onClick={() => Call.start(true)} />
           <IconButton label="Sesli ara" variant="ghost" icon={<Icon icon={PhoneIcon} size="lg" />} onClick={() => Call.start(false)} />
+          <span className="pk-top-sep" aria-hidden="true" />
+          <IconButton label="Ayarlar" variant="ghost" className="pk-gear" icon={<Icon icon={GearIcon} size="lg" />} onClick={openSettings} />
         </div>
       </header>
 

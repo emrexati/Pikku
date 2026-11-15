@@ -146,9 +146,9 @@ export function Settings({ isOpen, onClose }) {
           </div>
         </Group>
 
-        <Group title="Bağlantı" footer="Aktarma sunucusu iki tarafta da aynı olmalı. Mobil veride görüşme bağlanmazsa bir TURN sunucusu ekle.">
+        <Group title="Bağlantı" footer="Mesajlar ve dosyalar senin Cloudflare sunucundan geçer; değiştirirsen karşı taraf da yeni adresi kendiliğinden öğrenir. Görüntülü aramalar Cloudflare TURN ile otomatik bağlanır, TURN alanları isteğe bağlıdır.">
           <div className="pk-pad pk-stack">
-            <TextInput label="Aktarma sunucusu" value={d.server} onChange={v => set({ server: v })} placeholder="https://ntfy.sh" inputMode="url" autoCapitalize="off" hasAutoCorrect={false} width="100%" />
+            <TextInput label="Aktarma sunucusu" value={d.server} onChange={v => set({ server: v })} placeholder="https://pikku-relay.emresati.workers.dev" inputMode="url" autoCapitalize="off" hasAutoCorrect={false} width="100%" />
             <TextInput label="TURN adresi" value={d.turnURL} onChange={v => set({ turnURL: v })} placeholder="turn:sunucu.com:3478" autoCapitalize="off" hasAutoCorrect={false} isOptional width="100%" />
             <TextInput label="TURN kullanıcı adı" value={d.turnUser} onChange={v => set({ turnUser: v })} autoCapitalize="off" hasAutoCorrect={false} isOptional width="100%" />
             <TextInput label="TURN şifresi" value={d.turnPass} onChange={v => set({ turnPass: v })} isOptional width="100%" controlClassName="pk-secret" />

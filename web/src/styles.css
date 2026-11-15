@@ -358,7 +358,7 @@ input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
 .pk-swatch { position: relative; }
 
 /* 2 · Dokunma hedefleri: her dokunulan şey en az 44×44 */
-.pk-top .pk-gear, .pk-top-actions > * , .pk-top-actions button { min-width: 44px !important; min-height: 44px !important; }
+.pk-top .pk-gear, .pk-top-actions > :not(.pk-top-sep), .pk-top-actions button { min-width: 44px !important; min-height: 44px !important; }
 .pk-top-actions { gap: 4px; }
 .pk-attach { width: 40px; height: 40px; position: relative; }
 .pk-attach::before { content: ""; position: absolute; inset: -4px; }
@@ -382,3 +382,8 @@ input, textarea, select, [contenteditable] { font-size: max(16px, 1em); }
   color: #8A4B00; background: rgba(255, 159, 10, .16); }
 :root[data-dark] .pk-contrast-warn { color: #FFD60A; background: rgba(255, 214, 10, .12); }
 .pk-contrast-warn button { all: unset; cursor: pointer; margin-left: auto; font-weight: 600; text-decoration: underline; padding: 6px 4px; }
+
+/* Başlık: arama düğmeleri | ayarlar — ince dikey çizgiyle ayrılır */
+.pk-top { padding-left: 10px; }
+.pk-top-sep { flex: none; width: 1px; height: 24px; margin: 0 6px; border-radius: 1px; background: var(--pk-hair); }
+:root[data-dark] .pk-top-sep { background: rgba(235, 235, 245, .22); }

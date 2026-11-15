@@ -114,7 +114,7 @@ const room = {
   async open(text) { try { return JSON.parse(td.decode(await inflate(await this.openData(unb64(text))))); } catch { return null; } }
 };
 
-// ---------------------------------------------------------------- aktarma sunucusu (ntfy)
+// ---------------------------------------------------------------- aktarma sunucusu (Pikku / Cloudflare)
 class Relay {
   constructor(server, topic, since) { this.server = server.replace(/\/+$/, ''); this.topic = topic; this.since = since; this.ws = null; this.stopped = true; this.retry = 1; this.last = Date.now(); this.onMessage = null; this.onState = null; }
   start() { this.stopped = false; this.connect(); clearInterval(this.dog); this.dog = setInterval(() => { if (!this.stopped && Date.now() - this.last > 75000) { this.onState?.(false); this.reconnect(); } }, 20000); }
@@ -538,19 +538,21 @@ setInterval(() => {
 // ---------------------------------------------------------------- alma
 const PIKKU_SERVER = 'https://pikku-relay.emresati.workers.dev', DEFAULT_SERVER = 'https://ntfy.sh', BACKUP_SERVER = 'https://ntfy.envs.net';
 const clean = u => (u || '').trim().replace(/\/+$/, '');
-// Dinlenen sunucular: seçili sunucu + ntfy.sh + yedek. Mesaj seçili sunucudan gider, olmazsa sıradakinden.
+// Yalnızca Pikku'nun Cloudflare sunucusu kullanılır (ntfy kaldırıldı).
 // İki taraf da hepsini dinlediği için biri farklı sunucu seçse bile mesajlar kaybolmaz.
-// Sıra: (varsa) kullanıcının kendi seçtiği sunucu, sonra Pikku'nun Cloudflare sunucusu, sonra ntfy.sh ve yedek
-function relayServers() { const own = clean(S.config.server); return [...new Set([own && own !== DEFAULT_SERVER ? own : PIKKU_SERVER, PIKKU_SERVER, DEFAULT_SERVER, BACKUP_SERVER])]; }
+// Ayarlar'da elle başka bir Pikku sunucusu yazılmışsa o kullanılır; eski ntfy adresleri yok sayılır.
+const isNtfy = u => u === DEFAULT_SERVER || u === BACKUP_SERVER || /(^|\.)ntfy\./.test(new URL(u).hostname);
+function relayServers() { const own = clean(S.config.server); let ok = false; try { ok = !!own && !isNtfy(own); } catch {} return [ok ? own : PIKKU_SERVER]; }
 function sinceKey(server) { return server === DEFAULT_SERVER ? 'since-' + room.topic : server === BACKUP_SERVER ? 'since2-' + room.topic : 'since:' + server + ':' + room.topic; }
 function startRelay() {
   for (const r of S.relays) r.stop();
+  // Eski kurulumlarda kayıtlı ntfy adresini Pikku sunucusuna çevir
+  try { if (S.config && (!S.config.server || isNtfy(clean(S.config.server)))) { S.config = { ...S.config, server: PIKKU_SERVER }; saveConfig(); } } catch {}
   S.relays = []; S.relay = null; S.backup = null; S.connected = false;
   if (!S.config || !room.key) return;
   const up = new Map();
   for (const server of relayServers()) {
-    // Pikku sunucusu mesajları 7 gün, ntfy 12 saat saklar
-    const r = new Relay(server, room.topic, LS.get(sinceKey(server)) || (server === PIKKU_SERVER ? '168h' : '12h'));
+    const r = new Relay(server, room.topic, LS.get(sinceKey(server)) || '168h'); // sunucu mesajları 7 gün saklar
     r.onState = ok => { const was = S.connected; up.set(server, ok); S.connected = [...up.values()].some(Boolean) || Direct.open; if (S.connected && !was) sendPresence(true, true); if (S.connected !== was) emit(); };
     r.onMessage = (id, body) => { LS.set(sinceKey(server), id); receive(body); };
     S.relays.push(r); r.start();
@@ -946,7 +948,7 @@ export async function setup(name, code) {
   const r = await deriveRoom(code);
   await db.set('room', r);
   Object.assign(room, r);
-  S.config = { myName: name.trim(), code, server: 'https://ntfy.sh', deviceId: uuid(), turnURL: '', turnUser: '', turnPass: '', showPresence: true, readReceipts: true, notify: false };
+  S.config = { myName: name.trim(), code, server: PIKKU_SERVER, deviceId: uuid(), turnURL: '', turnUser: '', turnPass: '', showPresence: true, readReceipts: true, notify: false };
   await saveConfig();
   startRelay(); emit();
 }
@@ -954,8 +956,8 @@ export async function setup(name, code) {
 export async function saveSettings(patch) {
   const n = { ...S.config, ...patch };
   n.myName = (n.myName || '').trim() || S.config.myName;
-  n.server = (n.server || '').trim() || 'https://ntfy.sh';
-  try { new URL(n.server); } catch { n.server = 'https://ntfy.sh'; }
+  n.server = clean(n.server) || PIKKU_SERVER;
+  try { new URL(n.server); if (isNtfy(n.server)) n.server = PIKKU_SERVER; } catch { n.server = PIKKU_SERVER; }
   n.turnURL = (n.turnURL || '').trim(); n.turnUser = (n.turnUser || '').trim();
   const serverChanged = n.server !== S.config.server, presenceOff = S.config.showPresence && !n.showPresence;
   if (presenceOff) sendPresence(false, true);
