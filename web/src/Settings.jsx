@@ -50,11 +50,19 @@ export function Settings({ isOpen, onClose }) {
   const toggleNotify = async v => { if (!v) return set({ notify: false }); set({ notify: await core.requestNotifications() }); };
 
   const confirms = {
-    all: { title: 'Sohbeti iki taraftan da sil', description: 'Tüm mesajlar ve dosyalar iki cihazdan da silinecek.', action: 'İki taraftan da sil', run: core.clearForAll },
-    me: { title: 'Sohbeti benden sil', description: 'Tüm mesajlar yalnızca bu cihazdan silinecek.', action: 'Benden sil', run: core.clearLocal },
     reset: { title: 'Eşleşmeyi sıfırla', description: 'Eşleşme kodu, anahtar ve tüm mesajlar bu cihazdan silinecek.', action: 'Sıfırla', run: core.resetPairing }
   };
   const c = confirm && confirms[confirm];
+  // Sohbeti silme: onay penceresi yerine 5 sn'lik "Geri al" (Ayarlar kapanır, boşalan sohbet görünür)
+  const clearChat = async forAll => {
+    await save();
+    const undo = core.scheduleClear(forAll);
+    let dismiss = null;
+    dismiss = core.hooks.toast?.(forAll ? 'Sohbet iki taraftan da silinecek' : 'Sohbet bu cihazdan silindi', 5000, {
+      uniqueID: 'clear-chat',
+      endContent: <Button label="Geri al" variant="ghost" size="sm" onClick={() => { undo(); dismiss?.(); }} />
+    });
+  };
 
   return (
     <Dialog isOpen onOpenChange={o => { if (!o) cancel(); }} variant={narrow ? 'fullscreen' : 'standard'} width={560} maxHeight="88dvh" purpose="form" padding={0} aria-label="Ayarlar">
@@ -161,8 +169,8 @@ export function Settings({ isOpen, onClose }) {
         <Group title="Sohbet">
           <div className="pk-pad pk-stack">
             <div className="pk-danger-zone">
-              <Button label="Sohbeti yalnızca benden sil" variant="secondary" width="100%" className="pk-danger-text" onClick={() => setConfirm('me')} />
-              <Button label="Sohbeti iki taraftan da sil" variant="secondary" width="100%" className="pk-danger-text" onClick={() => setConfirm('all')} />
+              <Button label="Sohbeti yalnızca benden sil" variant="secondary" width="100%" className="pk-danger-text" onClick={() => clearChat(false)} />
+              <Button label="Sohbeti iki taraftan da sil" variant="secondary" width="100%" className="pk-danger-text" onClick={() => clearChat(true)} />
               <Button label="Eşleşmeyi sıfırla" variant="destructive" width="100%" onClick={() => setConfirm('reset')} />
             </div>
           </div>

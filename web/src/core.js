@@ -472,6 +472,26 @@ async function clearLocal() {
   emit();
 }
 function clearForAll() { clearLocal(); fire(makeEnv('clear')); }
+// Sohbeti silme 5 sn bekletilir: o sırada mesajlar gizlenir, "Geri al" ile vazgeçilebilir.
+// Bu arada gelen yeni mesajlar etkilenmez (yalnızca o anki mesajlar silinir).
+let clearJob = null;
+function scheduleClear(forAll) {
+  if (clearJob) clearJob.run();
+  const ids = new Set(S.messages.map(m => m.id));
+  S.hiddenIds = ids; emit();
+  const job = clearJob = {
+    timer: setTimeout(() => job.run(), 5000),
+    run() {
+      clearTimeout(job.timer); if (clearJob === job) clearJob = null;
+      S.hiddenIds = null;
+      if (S.messages.every(m => ids.has(m.id))) clearLocal(); else { for (const id of ids) removeMessage(id); emit(); }
+      if (forAll) fire(makeEnv('clear'));
+    },
+    undo() { clearTimeout(job.timer); if (clearJob === job) clearJob = null; S.hiddenIds = null; emit(); }
+  };
+  return () => job.undo();
+}
+addEventListener('pagehide', () => { clearJob?.run(); });
 function setTTL(v) {
   if (v === S.ttl) return;
   S.ttl = v; LS.set('ttl', v); fire(makeEnv('ttl', String(v)));
@@ -1021,6 +1041,6 @@ document.addEventListener('visibilitychange', () => {
 export {
   S, Call, Direct, WALLS, ACCENTS, TTL_OPTIONS, MAX_LEN, css, toHex, fromHex, paintWall, normalize, uuid, nowS, durText,
   timeFmt, dayFmt, sameDay, isToday, isYesterday, ttlLabel, displayPeer, peerStatus, byId, mediaURL,
-  sendText, editText, retry, sendImage, sendVideo, deleteForMe, deleteForAll, clearLocal, clearForAll, setTTL,
+  sendText, editText, retry, sendImage, sendVideo, deleteForMe, deleteForAll, clearLocal, clearForAll, scheduleClear, setTTL,
   userTyping, scheduleRead, room, deriveRoom
 };

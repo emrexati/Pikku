@@ -211,7 +211,7 @@ function Chat() {
     return () => { root.removeEventListener('scroll', onScroll, true); clearTimeout(timer); };
   });
 
-  const rows = useMemo(() => buildRows(S.messages.filter(m => !hidden.has(m.id))), [core.getVersion(), hidden]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => buildRows(S.messages.filter(m => !hidden.has(m.id) && !S.hiddenIds?.has(m.id))), [core.getVersion(), hidden]); // eslint-disable-line react-hooks/exhaustive-deps
   const media = viewer && viewer.url ? { src: viewer.url, alt: viewer.video ? 'Video' : 'Fotoğraf', type: viewer.video ? 'video' : 'image' } : null;
 
   return (
