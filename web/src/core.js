@@ -1,6 +1,19 @@
-// Pikku web — iPhone'daki Pikku ile aynı protokolü kullanır (PBKDF2 + HKDF + AES-GCM, ntfy aktarma).
-{
-'use strict';
+// Pikku çekirdeği: şifreleme, aktarma, mesajlar, aramalar ve tema durumu.
+// Arayüzden bağımsızdır; iPhone'daki Pikku ile aynı protokolü kullanır.
+
+// ---------------------------------------------------------------- değişiklik bildirimi
+let version = 0, queued = false;
+const listeners = new Set();
+export const subscribe = fn => { listeners.add(fn); return () => listeners.delete(fn); };
+export const getVersion = () => version;
+export function emit() {
+  version++;
+  if (queued) return;
+  queued = true;
+  queueMicrotask(() => { queued = false; listeners.forEach(f => f()); });
+}
+export const hooks = { toast: null };
+function toast(text, ms) { hooks.toast?.(text, ms); }
 
 // ---------------------------------------------------------------- yardımcılar
 const $ = s => document.querySelector(s);
@@ -27,23 +40,6 @@ const isToday = d => sameDay(d, new Date());
 const isYesterday = d => sameDay(d, new Date(Date.now() - 864e5));
 const durText = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-const ICON = {
-  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
-  check: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4 4 10-10"/></svg>',
-  checks: '<svg viewBox="0 0 24 24" style="width:18px"><path d="m2 12.5 4 4 10-10M10 16.5l1 0 10-10"/></svg>',
-  fail: '<svg viewBox="0 0 24 24" class="fail"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>',
-  timer: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>',
-  play: '<svg viewBox="0 0 24 24" style="fill:#fff;stroke:none"><path d="M8 5v14l11-7z"/></svg>',
-  up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
-  down: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>',
-  mic: '<svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/></svg>',
-  micOff: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M9 9v1a3 3 0 0 0 5 2.2M15 9.3V5a3 3 0 0 0-5.9-.7M5 10a7 7 0 0 0 11.5 5.4M19 10a7 7 0 0 1-.6 2.8M12 17v5"/></svg>',
-  video: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="3"/><path d="m16 10 6-3v10l-6-3"/></svg>',
-  videoOff: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M16 16v-1M16 10l6-3v10l-6-3M10 6h3a3 3 0 0 1 3 3v3M2 9a3 3 0 0 1 1-2M2 9v6a3 3 0 0 0 3 3h9"/></svg>',
-  flip: '<svg viewBox="0 0 24 24"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2M14 9v2h2M10 17v-2H8"/></svg>',
-  phone: '<svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>',
-  hang: '<svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>'
-};
 
 // ---------------------------------------------------------------- yerel depo (IndexedDB, şifreli)
 const db = {
@@ -174,9 +170,11 @@ const WALLS = [
   { name: 'Laboratuvar', light: [0xE4F6F1, 0xF4FBF9], dark: [0x0C2226, 0x10292E], style: 'science',
     preset: { mode: 1, accent: 0x1FA08A, myBubble: 0xD0F2EA, myText: 0x0D3B33, theirBubble: 0xFFFFFF, theirText: 0x16302B } },
   { name: 'Uzay', light: [0x0B0F2E, 0x2A1550], dark: [0x0B0F2E, 0x2A1550], style: 'space',
-    preset: { mode: 2, accent: 0x8E7CFF, myBubble: 0x3B2C7A, myText: 0xF1EEFF, theirBubble: 0x1B1F3B, theirText: 0xE4E6FF } }
+    preset: { mode: 2, accent: 0x8E7CFF, myBubble: 0x3B2C7A, myText: 0xF1EEFF, theirBubble: 0x1B1F3B, theirText: 0xE4E6FF } },
+  { name: 'Sade', light: [0xFFFFFF, 0xFFFFFF], dark: [0x000000, 0x000000] }
 ];
-const ACCENTS = [0x2AA3E6, 0x34A853, 0x8E5CF7, 0xF2994A, 0xE84D8A, 0xE5484D, 0x5C6B7A];
+export const PLAIN_WALLS = [9, 0, 1, 2, 3, 4];
+const ACCENTS = [0x007AFF, 0x34C759, 0x5856D6, 0xFF9500, 0xFF2D55, 0xFF3B30, 0x30B0C7, 0x8E8E93];
 const css = (h, a = 1) => `rgba(${h >> 16 & 255},${h >> 8 & 255},${h & 255},${a})`;
 const toHex = h => '#' + h.toString(16).padStart(6, '0');
 const fromHex = s => parseInt(s.slice(1), 16);
@@ -273,28 +271,48 @@ function paintWall(canvas, index, dark) {
   if (wall.style) { c.save(); Paint[wall.style](c, w, h, dark); c.restore(); }
 }
 
-const defaultTheme = () => ({ mode: 0, accent: 0x2AA3E6, myBubble: null, myText: null, theirBubble: null, theirText: null, fontSize: 16, wallpaper: 0 });
-let theme = (() => { try { return { ...defaultTheme(), ...JSON.parse(LS.get('theme') || '{}') }; } catch { return defaultTheme(); } })();
-const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-const isDark = () => theme.mode === 2 || (theme.mode === 0 && darkQuery.matches);
 
-function applyTheme() {
-  const root = document.documentElement, dark = isDark();
+// ---------------------------------------------------------------- tema durumu
+export const defaultTheme = () => ({ mode: 0, accent: 0x007AFF, myBubble: null, myText: null, theirBubble: null, theirText: null, fontSize: 17, wallpaper: 9 });
+export let theme = (() => { try { return { ...defaultTheme(), ...JSON.parse(LS.get('theme') || '{}') }; } catch { return defaultTheme(); } })();
+export const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+export const isDark = () => theme.mode === 2 || (theme.mode === 0 && darkQuery.matches);
+const THEME_KEYS = ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText', 'wallpaper'];
+export const isClassic = () => { const d = defaultTheme(); return THEME_KEYS.every(k => theme[k] === d[k]); };
+export const presetActive = i => { const p = WALLS[i]?.preset; return !!p && theme.wallpaper === i && THEME_KEYS.slice(0, 6).every(k => theme[k] === p[k]); };
+
+export function applyTheme() {
+  const root = document.documentElement, dark = isDark(), s = root.style;
   root.toggleAttribute('data-dark', dark);
-  root.style.colorScheme = dark ? 'dark' : 'light';
-  root.style.setProperty('--accent', toHex(theme.accent));
-  root.style.setProperty('--fs', theme.fontSize + 'px');
+  s.colorScheme = dark ? 'dark' : 'light';
+  const acc = toHex(theme.accent);
+  for (const k of ['--pk-accent', '--color-accent', '--color-text-accent', '--color-icon-accent']) s.setProperty(k, acc);
+  s.setProperty('--color-accent-muted', css(theme.accent, .2));
+  s.setProperty('--pk-fs', theme.fontSize + 'px');
   const setOpt = (name, v, meta) => {
-    if (v == null) { root.style.removeProperty(name); if (meta) root.style.removeProperty(meta); }
-    else { root.style.setProperty(name, toHex(v)); if (meta) root.style.setProperty(meta, css(v, .65)); }
+    if (v == null) { s.removeProperty(name); if (meta) s.removeProperty(meta); }
+    else { s.setProperty(name, toHex(v)); if (meta) s.setProperty(meta, css(v, .62)); }
   };
-  setOpt('--my-bubble', theme.myBubble); setOpt('--my-text', theme.myText, '--my-meta');
-  setOpt('--their-bubble', theme.theirBubble); setOpt('--their-text', theme.theirText, '--their-meta');
-  $('meta[name=theme-color]').content = dark ? '#17212B' : '#F7F7F7';
-  paintWall($('#wallpaper'), theme.wallpaper, dark);
+  setOpt('--pk-my-bubble', theme.myBubble); setOpt('--pk-my-text', theme.myText, '--pk-my-meta');
+  setOpt('--pk-their-bubble', theme.theirBubble); setOpt('--pk-their-text', theme.theirText, '--pk-their-meta');
+  const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = dark ? '#000000' : '#FFFFFF';
+  emit();
 }
-function saveTheme() { LS.set('theme', JSON.stringify(theme)); applyTheme(); renderSettingsTheme(); }
-addEventListener('resize', () => { clearTimeout(applyTheme.t); applyTheme.t = setTimeout(applyTheme, 120); });
+function storeTheme() { LS.set('theme', JSON.stringify(theme)); applyTheme(); }
+export function setTheme(patch) { theme = { ...theme, ...patch }; storeTheme(); }
+export function applyPreset(i) {
+  const p = WALLS[i]?.preset; if (!p) return;
+  setTheme({ wallpaper: i, mode: p.mode, accent: p.accent, myBubble: p.myBubble, myText: p.myText, theirBubble: p.theirBubble, theirText: p.theirText });
+}
+export function resetTheme() { const d = defaultTheme(); setTheme(Object.fromEntries(THEME_KEYS.map(k => [k, d[k]]))); }
+export function selectWall(i) {
+  const patch = { wallpaper: i };
+  if (WALLS[theme.wallpaper]?.preset) { const d = defaultTheme(); for (const k of THEME_KEYS.slice(0, 6)) patch[k] = d[k]; }
+  setTheme(patch);
+}
+let themeBackup = null;
+export const snapshotTheme = () => { themeBackup = { ...theme }; };
+export const restoreTheme = () => { if (themeBackup) { theme = { ...themeBackup }; storeTheme(); } };
 darkQuery.addEventListener?.('change', applyTheme);
 
 // ---------------------------------------------------------------- durum
@@ -339,14 +357,14 @@ function newOutgoing() {
   return m;
 }
 const byId = id => S.messages.find(m => m.id === id);
-function setStatus(id, s) { const m = byId(id); if (!m || (m.status === 'read' && s === 'sent')) return; m.status = s; save(); render(); }
-function setMedia(id, s) { const m = byId(id); if (!m) return; m.mediaState = s; save(); render(); }
+function setStatus(id, s) { const m = byId(id); if (!m || (m.status === 'read' && s === 'sent')) return; m.status = s; save(); emit(); }
+function setMedia(id, s) { const m = byId(id); if (!m) return; m.mediaState = s; save(); emit(); }
 
 function sendText(text, replyTo) {
   const t = text.trim().slice(0, MAX_LEN);
   if (!t) return;
   const m = newOutgoing(); m.text = t; if (replyTo) m.replyTo = replyTo;
-  S.messages.push(m); save(); render(true); deliver(m);
+  S.messages.push(m); save(); emit(); deliver(m);
 }
 async function deliver(m) {
   const env = makeEnv(m.media ? 'media' : 'text', m.text, m.id, m.ts || m.date);
@@ -358,7 +376,7 @@ async function deliver(m) {
 function editText(m, text) {
   const t = text.trim().slice(0, MAX_LEN);
   if (!m.mine || m.media || !t || t === m.text) return;
-  m.text = t; m.edited = true; save(); render();
+  m.text = t; m.edited = true; save(); emit();
   const env = makeEnv('edit', t); env.target = m.id; fire(env);
 }
 function retry(m) {
@@ -389,7 +407,7 @@ async function sendImage(file) {
     m.localFile = m.id; m.mediaState = 'uploading';
     await vault.putBytes('media:' + m.id, bytes);
     S.mediaURLs.set(m.id, URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })));
-    S.messages.push(m); save(); render(true); upload(m.id);
+    S.messages.push(m); save(); emit(); upload(m.id);
   } catch { toast('Fotoğraf açılamadı'); }
 }
 function videoInfo(file) {
@@ -418,7 +436,7 @@ async function sendVideo(file) {
   m.media = { url: '', kind: 'video', size: bytes.length, w: info.w || undefined, h: info.h || undefined, dur: isFinite(info.dur) ? info.dur : undefined, thumb };
   m.localFile = m.id; m.mediaState = 'uploading'; m.mime = file.type || 'video/mp4';
   await vault.putBytes('media:' + m.id, bytes);
-  S.messages.push(m); save(); render(true); upload(m.id);
+  S.messages.push(m); save(); emit(); upload(m.id);
 }
 async function upload(id) {
   const m = byId(id); if (!m || !room.key || !S.relay) return;
@@ -427,7 +445,7 @@ async function upload(id) {
     const raw = await vault.getBytes('media:' + id); if (!raw) throw new Error('missing');
     const url = await S.relay.upload(await room.sealData(raw), room.mediaTopic);
     const mm = byId(id); if (!mm) return;
-    mm.media.url = url; mm.mediaState = 'ready'; save(); render(); deliver(mm);
+    mm.media.url = url; mm.mediaState = 'ready'; save(); emit(); deliver(mm);
   } catch (e) {
     setMedia(id, 'failed'); setStatus(id, 'failed');
     toast(e.message === 'tooLarge' ? 'Dosya sunucu sınırını (15 MB) aşıyor' : 'Gönderilemedi, tekrar denemek için dokun');
@@ -446,7 +464,7 @@ async function download(id) {
       if (info.poster) { const pb = await canvasJPEG(info.poster, .7); if (pb) { const pu = new Uint8Array(await pb.arrayBuffer()); await vault.putBytes('poster:' + id, pu); S.mediaURLs.set('p:' + id, URL.createObjectURL(pb)); } }
     }
     const mm = byId(id); if (!mm) return;
-    mm.localFile = id; mm.mediaState = 'ready'; save(); render();
+    mm.localFile = id; mm.mediaState = 'ready'; save(); emit();
   } catch (e) { setMedia(id, e.message === 'expired' ? 'expired' : 'failed'); }
 }
 async function mediaURL(m, poster = false) {
@@ -465,7 +483,7 @@ async function removeMessage(id) {
   S.messages.splice(i, 1);
   await db.del('media:' + id); await db.del('poster:' + id);
   for (const k of [id, 'p:' + id]) { const u = S.mediaURLs.get(k); if (u) { URL.revokeObjectURL(u); S.mediaURLs.delete(k); } }
-  save(); render();
+  save(); emit();
 }
 const deleteForMe = m => removeMessage(m.id);
 function deleteForAll(m) { removeMessage(m.id); const env = makeEnv('delete'); env.target = m.id; fire(env); }
@@ -473,19 +491,19 @@ async function clearLocal() {
   S.messages = []; save();
   await db.delPrefix('media:'); await db.delPrefix('poster:');
   for (const u of S.mediaURLs.values()) URL.revokeObjectURL(u); S.mediaURLs.clear();
-  render();
+  emit();
 }
 function clearForAll() { clearLocal(); fire(makeEnv('clear')); }
 function setTTL(v) {
   if (v === S.ttl) return;
   S.ttl = v; LS.set('ttl', v); fire(makeEnv('ttl', String(v)));
   appendSystem(v > 0 ? `Otomatik silme: ${ttlLabel(v)}` : 'Otomatik silme kapatıldı');
-  renderHeader();
+  emit();
 }
 function appendSystem(text) {
   const t = nowS(); const m = { id: uuid(), text, mine: false, date: t, status: 'received', system: true, ts: t };
   if (S.ttl > 0) m.expiresAt = t + S.ttl;
-  S.messages.push(m); save(); render(true);
+  S.messages.push(m); save(); emit();
 }
 
 // ---------------------------------------------------------------- çevrimiçi, yazıyor, okundu
@@ -499,7 +517,7 @@ function sendPresence(on, force) {
   S.lastPresenceSent = on ? Date.now() : 0;
   post(makeEnv('presence', on ? 'on' : 'off'), false, !on);
 }
-function markPeerSeen() { S.peerOnline = true; S.lastPeerPing = Date.now(); S.peerLastSeen = nowS(); LS.set('peerLastSeen', S.peerLastSeen); renderHeader(); }
+function markPeerSeen() { S.peerOnline = true; S.lastPeerPing = Date.now(); S.peerLastSeen = nowS(); LS.set('peerLastSeen', S.peerLastSeen); emit(); }
 let readTimer = null;
 function scheduleRead() {
   if (!S.active || !S.config?.readReceipts) return;
@@ -533,7 +551,7 @@ setInterval(() => {
   if (S.peerOnline && Date.now() - S.lastPeerPing > 70000) { S.peerOnline = false; S.peerTyping = false; }
   const t = nowS(), expired = S.messages.filter(m => m.expiresAt && m.expiresAt <= t);
   for (const m of expired) removeMessage(m.id);
-  renderHeader();
+  emit();
 }, 5000);
 
 // ---------------------------------------------------------------- alma
@@ -542,9 +560,9 @@ function startRelay() {
   if (!S.config || !room.key) return;
   const since = LS.get('since-' + room.topic) || '12h';
   const r = new Relay(S.config.server || 'https://ntfy.sh', room.topic, since);
-  r.onState = ok => { const was = S.connected; S.connected = ok; if (ok && !was) sendPresence(true, true); renderHeader(); };
+  r.onState = ok => { const was = S.connected; S.connected = ok; if (ok && !was) sendPresence(true, true); emit(); };
   r.onMessage = (id, body) => receive(id, body);
-  S.relay = r; r.start(); renderHeader();
+  S.relay = r; r.start(); emit();
 }
 let notifyCount = 0;
 function notify(title, body) {
@@ -570,21 +588,21 @@ async function receive(id, body) {
       S.peerTyping = false;
       S.messages.push(m);
       if (S.messages.length > 1 && S.messages[S.messages.length - 2].date > m.date) S.messages.sort((a, b) => a.date - b.date);
-      save(); render(true);
+      save(); emit();
       if (m.media) download(m.id);
       if (age < 120) markPeerSeen();
       notify(displayPeer(), m.media ? (m.media.kind === 'video' ? 'Video' : 'Fotoğraf') : 'Yeni mesaj');
       scheduleRead();
       break;
     }
-    case 'edit': { const m = byId(env.target); if (m && !m.mine) { m.text = String(env.body).slice(0, MAX_LEN); m.edited = true; save(); render(); } break; }
+    case 'edit': { const m = byId(env.target); if (m && !m.mine) { m.text = String(env.body).slice(0, MAX_LEN); m.edited = true; save(); emit(); } break; }
     case 'delete': if (env.target) removeMessage(env.target); break;
     case 'clear': await clearLocal(); appendSystem(`${displayPeer()} sohbeti temizledi`); break;
     case 'ttl': { const v = Number(env.body) || 0; S.ttl = v; LS.set('ttl', v); appendSystem(v > 0 ? `${displayPeer()} otomatik silmeyi ${ttlLabel(v)} yaptı` : `${displayPeer()} otomatik silmeyi kapattı`); break; }
     case 'read': {
       const upTo = Number(env.body) || 0; let ch = false;
       for (const m of S.messages) if (m.mine && m.status === 'sent' && (m.ts ?? Infinity) <= upTo) { m.status = 'read'; ch = true; }
-      if (ch) { save(); render(); }
+      if (ch) { save(); emit(); }
       break;
     }
     case 'presence':
@@ -595,12 +613,12 @@ async function receive(id, body) {
     case 'typing':
       if (age >= 10) return;
       markPeerSeen(); S.peerTyping = true; clearTimeout(receive.typing);
-      receive.typing = setTimeout(() => { S.peerTyping = false; renderHeader(); }, 6000);
+      receive.typing = setTimeout(() => { S.peerTyping = false; emit(); }, 6000);
       break;
     case 'screenshot': appendSystem(`${displayPeer()} ekran görüntüsü aldı`); break;
     case 'offer': case 'answer': case 'hangup': case 'reject': case 'busy': Call.handle(env); break;
   }
-  renderHeader();
+  emit();
 }
 
 // ---------------------------------------------------------------- arama (WebRTC)
@@ -691,11 +709,10 @@ const Call = {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers(), bundlePolicy: 'max-bundle' });
     this.pc = pc;
     for (const t of this.local.getTracks()) pc.addTrack(t, this.local);
-    if (this.video) { const lv = $('#localVideo'); lv.srcObject = this.local; lv.hidden = false; }
+    emit();
     pc.ontrack = ev => {
       const stream = ev.streams[0] || new MediaStream([ev.track]);
-      $('#remoteAudio').srcObject = stream; $('#remoteAudio').play().catch(() => {});
-      if (this.video) { const rv = $('#remoteVideo'); rv.srcObject = stream; rv.play().catch(() => {}); }
+      this.remote = stream; emit();
     };
     pc.oniceconnectionstatechange = () => {
       if (pc !== this.pc) return;
@@ -703,8 +720,8 @@ const Call = {
       if (s === 'connected' || s === 'completed') {
         this.reconnecting = false;
         if (this.state !== 'active') { this.state = 'active'; this.startedAt = nowS(); }
-        this.render();
-      } else if (s === 'disconnected') { if (this.state === 'active') { this.reconnecting = true; this.render(); } }
+        emit();
+      } else if (s === 'disconnected') { if (this.state === 'active') { this.reconnecting = true; emit(); } }
       else if (s === 'failed') this.end('hangup', this.state === 'active' ? 'Bağlantı koptu' : 'Bağlantı kurulamadı (ağ engeli olabilir, Ayarlar\'dan TURN ekleyebilirsin)');
     };
   },
@@ -716,8 +733,8 @@ const Call = {
       pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
     });
   },
-  toggleMute() { this.muted = !this.muted; this.local?.getAudioTracks().forEach(t => t.enabled = !this.muted); this.render(); },
-  toggleCam() { this.camOff = !this.camOff; this.local?.getVideoTracks().forEach(t => t.enabled = !this.camOff); this.render(); },
+  toggleMute() { this.muted = !this.muted; this.local?.getAudioTracks().forEach(t => t.enabled = !this.muted); emit(); },
+  toggleCam() { this.camOff = !this.camOff; this.local?.getVideoTracks().forEach(t => t.enabled = !this.camOff); emit(); },
   async flip() {
     if (!this.local || !this.video) return;
     this.facing = this.facing === 'user' ? 'environment' : 'user';
@@ -728,18 +745,18 @@ const Call = {
       await sender?.replaceTrack(nt);
       if (old) { this.local.removeTrack(old); old.stop(); }
       this.local.addTrack(nt); nt.enabled = !this.camOff;
-      $('#localVideo').srcObject = this.local;
+      this.localVersion = (this.localVersion || 0) + 1;
     } catch { this.facing = this.facing === 'user' ? 'environment' : 'user'; toast('Kamera değiştirilemedi'); }
-    this.render();
+    emit();
   },
   reset() { this.muted = false; this.camOff = false; this.facing = 'user'; this.reconnecting = false; this.startedAt = 0; },
-  set(s) { this.state = s; this.render(); },
+  set(s) { this.state = s; emit(); },
   cleanup() {
     this.stopRing(); clearTimeout(this.timeout);
     this.local?.getTracks().forEach(t => t.stop()); this.local = null;
     try { this.pc?.close(); } catch {} this.pc = null;
-    for (const sel of ['#remoteVideo', '#localVideo', '#remoteAudio']) { const el = $(sel); el.srcObject = null; }
-    this.pendingOffer = null; this.startedAt = 0; this.reconnecting = false; this.state = 'idle'; this.render();
+    this.remote = null;
+    this.pendingOffer = null; this.startedAt = 0; this.reconnecting = false; this.state = 'idle'; emit();
   },
   startRing() {
     this.stopRing();
@@ -758,328 +775,70 @@ const Call = {
     beep(); this.ring = setInterval(beep, 2500);
   },
   stopRing() { clearInterval(this.ring); this.ring = null; },
-  render() {
-    const el = $('#call');
-    el.hidden = this.state === 'idle';
-    clearInterval(this.tick);
-    if (this.state === 'idle') { $('#remoteVideo').hidden = true; $('#localVideo').hidden = true; return; }
-    const name = displayPeer();
-    $('#callName').textContent = name; $('#callAvatar').textContent = (name[0] || '?').toUpperCase();
-    const remoteOn = this.video && this.state === 'active';
-    $('#remoteVideo').hidden = !remoteOn; el.classList.toggle('video-on', remoteOn);
-    $('#localVideo').hidden = !this.video || this.camOff || !this.local;
-    $('#localVideo').classList.toggle('back', this.facing !== 'user');
-    const status = () => {
-      switch (this.state) {
-        case 'incoming': return this.video ? 'Görüntülü arama geliyor…' : 'Sesli arama geliyor…';
-        case 'outgoing': return 'Çalıyor…';
-        case 'connecting': return 'Bağlanıyor…';
-        case 'active': return this.reconnecting ? 'Yeniden bağlanıyor…' : durText(nowS() - this.startedAt);
-      }
-      return '';
-    };
-    $('#callStatus').textContent = status();
-    if (this.state === 'active') this.tick = setInterval(() => { $('#callStatus').textContent = status(); }, 1000);
-    const btn = (icon, label, cls, fn) => { const b = document.createElement('button'); b.className = 'cbtn ' + (cls || ''); b.innerHTML = `<span>${icon}</span>${label}`; b.onclick = fn; return b; };
-    const c = $('#callControls'); c.innerHTML = ''; c.classList.toggle('incoming', this.state === 'incoming');
-    if (this.state === 'incoming') {
-      c.append(btn(ICON.hang, 'Reddet', 'red', () => this.reject()), btn(this.video ? ICON.video : ICON.phone, 'Kabul et', 'green', () => this.accept()));
-    } else {
-      c.append(btn(this.muted ? ICON.micOff : ICON.mic, 'Sessiz', this.muted ? 'on' : '', () => this.toggleMute()));
-      if (this.video) c.append(btn(this.camOff ? ICON.videoOff : ICON.video, 'Kamera', this.camOff ? 'on' : '', () => this.toggleCam()), btn(ICON.flip, 'Çevir', '', () => this.flip()));
-      c.append(btn(ICON.hang, 'Bitir', 'red', () => this.hangup()));
+  render() { emit(); },
+  status() {
+    switch (this.state) {
+      case 'incoming': return this.video ? 'Görüntülü arama geliyor…' : 'Sesli arama geliyor…';
+      case 'outgoing': return 'Çalıyor…';
+      case 'connecting': return 'Bağlanıyor…';
+      case 'active': return this.reconnecting ? 'Yeniden bağlanıyor…' : durText(nowS() - this.startedAt);
     }
+    return '';
   }
 };
 addEventListener('beforeunload', () => { if (Call.state !== 'idle') { const e = makeEnv('hangup'); e.callId = Call.id; e.video = Call.video; post(e, true, true); } sendPresence(false, true); });
 
-// ---------------------------------------------------------------- görünüm: sohbet
-const msgEl = $('#messages');
-function nearBottom() { return msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 120; }
-function scrollEnd() { msgEl.scrollTop = msgEl.scrollHeight; }
 
-function statusIcon(m) {
-  if (!m.mine) return '';
-  return { sending: ICON.clock, sent: ICON.check, read: ICON.checks, failed: ICON.fail }[m.status] || '';
+// ---------------------------------------------------------------- kurulum, ayarlar, yaşam döngüsü
+export function randomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(16));
+  return [0, 1, 2, 3].map(g => [0, 1, 2, 3].map(i => chars[r[g * 4 + i] % chars.length]).join('')).join('-');
 }
-function metaHTML(m) {
-  return `<span class="meta">${m.expiresAt ? ICON.timer : ''}${m.edited ? 'düzenlendi ' : ''}${timeFmt.format(new Date(m.date * 1000))}${statusIcon(m)}</span>`;
-}
-function quoteHTML(m) {
-  if (!m.replyTo) return '';
-  const r = byId(m.replyTo);
-  const who = r ? (r.mine ? 'Sen' : displayPeer()) : 'Mesaj';
-  const what = r ? (r.media ? (r.media.kind === 'video' ? 'Video' : 'Fotoğraf') : r.text) : 'Silinmiş mesaj';
-  return `<div class="quote" data-jump="${esc(m.replyTo)}"><div class="quote-bar"></div><div><div class="quote-name">${esc(who)}</div><div class="quote-text">${esc(what)}</div></div></div>`;
-}
-function mediaSize(info) {
-  const w = info.w || 0, h = info.h || 0, max = Math.min(260, innerWidth * .62);
-  if (!w || !h) return [max, max];
-  let W = max, H = W * h / w; if (H > 320) { H = 320; W = H * w / h; }
-  return [Math.max(W, 120), Math.max(H, 90)];
-}
-function mediaHTML(m) {
-  const info = m.media, [W, H] = mediaSize(info), video = info.kind === 'video';
-  const ph = info.thumb ? `<img class="ph" alt="" src="data:image/jpeg;base64,${info.thumb}">` : '';
-  let center = '';
-  if (m.mediaState === 'uploading' || m.mediaState === 'downloading') center = '<span><i class="spinner"></i></span>';
-  else if (m.mediaState === 'failed') center = `<span>${m.mine ? ICON.up : ICON.down}</span>`;
-  else if (m.mediaState === 'expired') center = '<span class="label">Süresi doldu</span>';
-  else if (video) center = `<span>${ICON.play}</span>`;
-  const real = m.mediaState === 'ready' ? `<img class="real" alt="" data-media="${esc(m.id)}" data-poster="${video ? 1 : ''}" hidden>` : '';
-  return `<div class="media-wrap" style="width:${W | 0}px;height:${H | 0}px">${ph}${real}${video && info.dur ? `<span class="media-dur">${durText(info.dur)}</span>` : ''}<div class="media-center">${center}</div><span class="media-meta">${m.expiresAt ? ICON.timer : ''}${timeFmt.format(new Date(m.date * 1000))}${statusIcon(m)}</span></div>`;
-}
-function render(stick) {
-  const keep = stick || nearBottom();
-  const parts = [];
-  if (!S.messages.length) parts.push('<div class="empty"><b>Henüz mesaj yok</b>Karşı taraf aynı eşleşme koduyla giriş yaptığında mesajlarınız birbirine ulaşır.</div>');
-  let prev = null;
-  for (const m of S.messages) {
-    const d = new Date(m.date * 1000);
-    if (!prev || !sameDay(prev, d)) parts.push(`<div class="day">${isToday(d) ? 'Bugün' : isYesterday(d) ? 'Dün' : dayFmt.format(d)}</div>`);
-    prev = d;
-    if (m.system) { parts.push(`<div class="sys" data-id="${esc(m.id)}">${esc(m.text)} · ${timeFmt.format(d)}</div>`); continue; }
-    const inner = m.media ? quoteHTML(m) + mediaHTML(m) : `${quoteHTML(m)}<div class="text">${esc(m.text)}${metaHTML(m)}</div>`;
-    parts.push(`<div class="row ${m.mine ? 'mine' : 'theirs'}" id="m-${esc(m.id)}"><div class="bubble${m.media ? ' media' : ''}" data-id="${esc(m.id)}">${inner}</div></div>`);
-  }
-  msgEl.innerHTML = parts.join('');
-  msgEl.querySelectorAll('img.real').forEach(async img => {
-    const m = byId(img.dataset.media); if (!m) return;
-    const u = await mediaURL(m, !!img.dataset.poster);
-    if (u) { img.src = u; img.hidden = false; img.previousElementSibling?.classList?.contains('ph') && (img.previousElementSibling.hidden = true); }
-  });
-  if (keep) scrollEnd();
-}
-function renderHeader() {
-  const name = S.peerName || 'Pikku';
-  $('#peerName').textContent = name; $('#peerAvatar').textContent = (name[0] || '?').toUpperCase();
-  const st = $('#peerStatus'); st.textContent = peerStatus(); st.classList.toggle('on', S.connected && (S.peerOnline || S.peerTyping) && !!S.config?.showPresence);
-  $('#ttlIcon').hidden = !(S.ttl > 0);
+export const codeIsValid = code => normalize(code || '').length >= 12;
+
+export async function setup(name, code) {
+  code = code.trim().toUpperCase();
+  const r = await deriveRoom(code);
+  await db.set('room', r);
+  Object.assign(room, r);
+  S.config = { myName: name.trim(), code, server: 'https://ntfy.sh', deviceId: uuid(), turnURL: '', turnUser: '', turnPass: '', showPresence: true, readReceipts: true, notify: false };
+  await saveConfig();
+  startRelay(); emit();
 }
 
-// Etkileşim: dokunma, sağ tık / uzun basma menüsü
-msgEl.addEventListener('click', e => {
-  const q = e.target.closest('.quote'); if (q) { const t = $('#m-' + CSS.escape(q.dataset.jump)); t?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
-  const b = e.target.closest('.bubble'); if (!b) return;
-  const m = byId(b.dataset.id); if (!m) return;
-  if (m.media && m.mediaState === 'ready') openViewer(m);
-  else if (m.status === 'failed' || m.mediaState === 'failed') retry(m);
-});
-msgEl.addEventListener('contextmenu', e => {
-  const b = e.target.closest('.bubble, .sys'); if (!b) return;
-  e.preventDefault(); openMenu(byId(b.dataset.id), e.clientX, e.clientY);
-});
-let pressT = null;
-msgEl.addEventListener('touchstart', e => {
-  const b = e.target.closest('.bubble, .sys'); if (!b) return;
-  const t = e.touches[0];
-  pressT = setTimeout(() => { navigator.vibrate?.(15); openMenu(byId(b.dataset.id), t.clientX, t.clientY); }, 480);
-}, { passive: true });
-for (const ev of ['touchend', 'touchmove', 'touchcancel']) msgEl.addEventListener(ev, () => clearTimeout(pressT), { passive: true });
-
-function openMenu(m, x, y) {
-  if (!m) return;
-  const menu = $('#menu'), items = [];
-  if (!m.system) {
-    items.push(['Yanıtla', () => { S.replying = m; S.editing = null; updateContext(); $('#input').focus(); }]);
-    if (m.text) items.push(['Kopyala', () => navigator.clipboard?.writeText(m.text).then(() => toast('Kopyalandı')).catch(() => {})]);
-    if (m.mine && !m.media && m.status !== 'failed') items.push(['Düzenle', () => { S.editing = m; S.replying = null; $('#input').value = m.text; autosize(); updateContext(); $('#input').focus(); }]);
-    if (m.status === 'failed' || m.mediaState === 'failed') items.push(['Tekrar dene', () => retry(m)]);
-  }
-  items.push(['Benden sil', () => deleteForMe(m), true]);
-  if (!m.system) items.push(['Herkesten sil', () => deleteForAll(m), true]);
-  menu.innerHTML = '';
-  for (const [label, fn, danger] of items) { const b = document.createElement('button'); b.textContent = label; if (danger) b.className = 'danger'; b.onclick = () => { closeMenu(); fn(); }; menu.append(b); }
-  menu.hidden = false;
-  const r = menu.getBoundingClientRect();
-  menu.style.left = Math.min(Math.max(8, x), innerWidth - r.width - 8) + 'px';
-  menu.style.top = Math.min(Math.max(8, y), innerHeight - r.height - 8) + 'px';
-}
-function closeMenu() { $('#menu').hidden = true; }
-document.addEventListener('pointerdown', e => { if (!$('#menu').hidden && !e.target.closest('#menu')) closeMenu(); });
-addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); closeViewer(); } });
-
-// Yazma alanı
-const input = $('#input');
-function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px'; $('#sendBtn').disabled = !input.value.trim(); }
-input.addEventListener('input', () => { autosize(); if (input.value) userTyping(); });
-input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer:fine)').matches) { e.preventDefault(); send(); } });
-$('#sendBtn').onclick = send;
-function send() {
-  const v = input.value; if (!v.trim()) return;
-  if (S.editing) { editText(S.editing, v); S.editing = null; } else { sendText(v, S.replying?.id); S.replying = null; }
-  input.value = ''; autosize(); updateContext(); input.focus();
-}
-function updateContext() {
-  const bar = $('#contextBar'), m = S.editing || S.replying;
-  bar.hidden = !m; if (!m) return;
-  $('#contextTitle').textContent = S.editing ? 'Düzenleniyor' : (m.mine ? 'Kendi mesajına yanıt' : `${displayPeer()} yanıtlanıyor`);
-  $('#contextBody').textContent = m.media ? (m.media.kind === 'video' ? 'Video' : 'Fotoğraf') : m.text;
-}
-$('#contextClose').onclick = () => { if (S.editing) input.value = ''; S.editing = null; S.replying = null; autosize(); updateContext(); };
-$('#fileInput').onchange = e => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  if (f.type.startsWith('video/')) sendVideo(f); else if (f.type.startsWith('image/')) sendImage(f); else toast('Yalnızca fotoğraf ve video gönderilebilir');
-};
-$('#videoCallBtn').onclick = () => Call.start(true);
-$('#voiceCallBtn').onclick = () => Call.start(false);
-
-// Görüntüleyici
-async function openViewer(m) {
-  const u = await mediaURL(m); if (!u) return;
-  const body = $('#viewerBody'); body.innerHTML = '';
-  const el = document.createElement(m.media.kind === 'video' ? 'video' : 'img');
-  el.src = u; if (m.media.kind === 'video') { el.controls = true; el.autoplay = true; el.playsInline = true; }
-  body.append(el);
-  const a = $('#viewerSave'); a.href = u; a.download = `pikku-${m.id.slice(0, 8)}.${m.media.kind === 'video' ? 'mp4' : 'jpg'}`;
-  $('#viewer').hidden = false;
-}
-function closeViewer() { const v = $('#viewer'); if (v.hidden) return; v.hidden = true; $('#viewerBody').innerHTML = ''; }
-$('#viewerClose').onclick = closeViewer;
-
-// Bildirim ve iletişim kutusu
-function toast(text, ms = 3200) { const t = $('#toast'); t.textContent = text; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, ms); }
-function confirmBox(text, label, fn) {
-  $('#dialogText').textContent = text;
-  const a = $('#dialogActions'); a.innerHTML = '';
-  const ok = document.createElement('button'); ok.className = 'danger'; ok.textContent = label; ok.onclick = () => { $('#dialog').hidden = true; fn(); };
-  const no = document.createElement('button'); no.textContent = 'Vazgeç'; no.onclick = () => { $('#dialog').hidden = true; };
-  a.append(ok, no); $('#dialog').hidden = false;
-}
-
-// ---------------------------------------------------------------- ayarlar
-let draft = null, codeShown = false, themeBackup = null;
-const THEME_KEYS = ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText', 'wallpaper'];
-const isClassic = () => { const d = defaultTheme(); return THEME_KEYS.every(k => theme[k] === d[k]); };
-const presetActive = i => { const p = WALLS[i]?.preset; return !!p && theme.wallpaper === i && ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText'].every(k => theme[k] === p[k]); };
-function resetTheme() { const d = defaultTheme(); for (const k of THEME_KEYS) theme[k] = d[k]; saveTheme(); renderSettingsTheme(true); }
-function openSettings() {
-  draft = { ...S.config }; themeBackup = { ...theme };
-  $('#sName').value = draft.myName; $('#sPresence').checked = draft.showPresence; $('#sRead').checked = draft.readReceipts;
-  $('#sNotify').checked = !!draft.notify && 'Notification' in window && Notification.permission === 'granted';
-  $('#sServer').value = draft.server; $('#sTurn').value = draft.turnURL; $('#sTurnUser').value = draft.turnUser; $('#sTurnPass').value = draft.turnPass;
-  const sel = $('#sTTL'); sel.innerHTML = TTL_OPTIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); sel.value = String(S.ttl);
-  codeShown = false; $('#sCode').textContent = '••••-••••-••••-••••'; $('#showCode').textContent = 'Göster';
-  $('#settings').hidden = false; renderSettingsTheme(true);
-}
-function renderSettingsTheme(full) {
-  if ($('#settings').hidden) return;
-  const dark = isDark();
-  document.querySelectorAll('#sMode button').forEach(b => b.classList.toggle('on', Number(b.dataset.v) === theme.mode));
-  $('#sFont').value = theme.fontSize; $('#fontVal').textContent = theme.fontSize;
-  const cs = getComputedStyle(document.documentElement), rgbHex = v => { v = v.trim(); if (v.startsWith('#')) return v.length === 7 ? v : '#000000'; const m = v.match(/\d+/g); return m ? '#' + m.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join('') : '#000000'; };
-  $('#cMyBubble').value = rgbHex(cs.getPropertyValue('--my-bubble')); $('#cMyText').value = rgbHex(cs.getPropertyValue('--my-text'));
-  $('#cTheirBubble').value = rgbHex(cs.getPropertyValue('--their-bubble')); $('#cTheirText').value = rgbHex(cs.getPropertyValue('--their-text'));
-  $('#accentRow').innerHTML = ACCENTS.map(h => `<button class="swatch${h === theme.accent ? ' on' : ''}" style="background:${toHex(h)}" data-h="${h}" aria-label="Vurgu rengi"></button>`).join('');
-  if (full) {
-    $('#themeCards').innerHTML = '<button class="theme-card" data-i="-1"><canvas></canvas>Klasik</button>' + WALLS.map((w, i) => w.preset ? `<button class="theme-card" data-i="${i}"><canvas></canvas>${esc(w.name)}</button>` : '').join('');
-    $('#wallRow').innerHTML = WALLS.map((w, i) => w.preset ? '' : `<button class="wall" data-i="${i}"><canvas></canvas>${esc(w.name)}</button>`).join('');
-    let pv = $('#colorPreview canvas'); if (!pv) { pv = document.createElement('canvas'); $('#colorPreview').prepend(pv); }
-  }
-  document.querySelectorAll('#themeCards .theme-card').forEach(b => {
-    const i = +b.dataset.i;
-    if (i < 0) { b.classList.toggle('on', isClassic()); paintWall(b.querySelector('canvas'), 0, darkQuery.matches); return; }
-    b.classList.toggle('on', presetActive(i));
-    paintWall(b.querySelector('canvas'), i, WALLS[i].preset.mode === 1 ? false : WALLS[i].preset.mode === 2 ? true : dark);
-  });
-  document.querySelectorAll('#wallRow .wall').forEach(b => { const i = +b.dataset.i; b.classList.toggle('on', i === theme.wallpaper); paintWall(b.querySelector('canvas'), i, dark); });
-  paintWall($('#colorPreview canvas'), theme.wallpaper, dark);
-}
-$('#openSettings').onclick = openSettings;
-$('#settingsCancel').onclick = () => { if (themeBackup) { theme = { ...themeBackup }; LS.set('theme', JSON.stringify(theme)); applyTheme(); } $('#settings').hidden = true; };
-$('#settingsSave').onclick = async () => {
-  const n = { ...draft };
-  n.myName = $('#sName').value.trim() || S.config.myName;
-  n.showPresence = $('#sPresence').checked; n.readReceipts = $('#sRead').checked; n.notify = $('#sNotify').checked;
-  n.server = $('#sServer').value.trim() || 'https://ntfy.sh';
+export async function saveSettings(patch) {
+  const n = { ...S.config, ...patch };
+  n.myName = (n.myName || '').trim() || S.config.myName;
+  n.server = (n.server || '').trim() || 'https://ntfy.sh';
   try { new URL(n.server); } catch { n.server = 'https://ntfy.sh'; }
-  n.turnURL = $('#sTurn').value.trim(); n.turnUser = $('#sTurnUser').value.trim(); n.turnPass = $('#sTurnPass').value;
+  n.turnURL = (n.turnURL || '').trim(); n.turnUser = (n.turnUser || '').trim();
   const serverChanged = n.server !== S.config.server, presenceOff = S.config.showPresence && !n.showPresence;
   if (presenceOff) sendPresence(false, true);
   S.config = n; await saveConfig();
   if (serverChanged) startRelay();
   if (n.showPresence) sendPresence(true, true);
-  $('#settings').hidden = true; renderHeader();
-};
-$('#sNotify').onchange = async e => {
-  if (!e.target.checked) return;
-  if (!('Notification' in window)) { e.target.checked = false; return toast('Bu tarayıcı bildirimleri desteklemiyor'); }
-  const p = await Notification.requestPermission();
-  if (p !== 'granted') { e.target.checked = false; toast('Bildirim izni verilmedi'); }
-};
-$('#sTTL').onchange = e => setTTL(Number(e.target.value));
-$('#sMode').onclick = e => { const b = e.target.closest('button'); if (!b) return; theme.mode = Number(b.dataset.v); saveTheme(); renderSettingsTheme(true); };
-$('#accentRow').onclick = e => { const b = e.target.closest('.swatch'); if (!b) return; theme.accent = Number(b.dataset.h); saveTheme(); };
-$('#themeCards').onclick = e => {
-  const b = e.target.closest('.theme-card'); if (!b) return;
-  const i = +b.dataset.i;
-  if (i < 0) return resetTheme();
-  const p = WALLS[i].preset;
-  Object.assign(theme, { wallpaper: i, mode: p.mode, accent: p.accent, myBubble: p.myBubble, myText: p.myText, theirBubble: p.theirBubble, theirText: p.theirText });
-  saveTheme(); renderSettingsTheme(true);
-};
-$('#wallRow').onclick = e => {
-  const b = e.target.closest('.wall'); if (!b) return;
-  // Hazır temadan düz arka plana geçerken temanın renkleri de bırakılır
-  if (WALLS[theme.wallpaper]?.preset) { const d = defaultTheme(); for (const k of ['mode', 'accent', 'myBubble', 'myText', 'theirBubble', 'theirText']) theme[k] = d[k]; }
-  theme.wallpaper = +b.dataset.i; saveTheme(); renderSettingsTheme(true);
-};
-$('#sFont').oninput = e => { theme.fontSize = Number(e.target.value); saveTheme(); };
-for (const [id, key] of [['#cMyBubble', 'myBubble'], ['#cMyText', 'myText'], ['#cTheirBubble', 'theirBubble'], ['#cTheirText', 'theirText']]) {
-  $(id).oninput = e => { theme[key] = fromHex(e.target.value); LS.set('theme', JSON.stringify(theme)); applyTheme(); };
+  emit();
 }
-$('#resetColors').onclick = resetTheme;
-$('#showCode').onclick = () => { codeShown = !codeShown; $('#sCode').textContent = codeShown ? S.config.code : '••••-••••-••••-••••'; $('#showCode').textContent = codeShown ? 'Gizle' : 'Göster'; };
-$('#copyCode2').onclick = () => navigator.clipboard?.writeText(S.config.code).then(() => toast('Kopyalandı')).catch(() => {});
-$('#clearAll').onclick = () => confirmBox('Tüm mesajlar iki cihazdan da silinsin mi?', 'İki taraftan da sil', clearForAll);
-$('#clearMe').onclick = () => confirmBox('Tüm mesajlar yalnızca bu cihazdan silinsin mi?', 'Benden sil', clearLocal);
-$('#resetPair').onclick = () => confirmBox('Eşleşme, anahtar ve tüm mesajlar bu cihazdan silinsin mi?', 'Sıfırla', async () => {
+
+export async function requestNotifications() {
+  if (!('Notification' in window)) { toast('Bu tarayıcı bildirimleri desteklemiyor'); return false; }
+  const p = await Notification.requestPermission();
+  if (p !== 'granted') toast('Bildirim izni verilmedi');
+  return p === 'granted';
+}
+
+export async function resetPairing() {
   sendPresence(false, true); S.relay?.stop(); S.relay = null;
   await clearLocal(); await db.del('config'); await db.del('room');
   for (const k of ['peerName', 'peerLastSeen', 'ttl', 'lastReadSentTs']) LS.del(k);
   location.reload();
-});
-
-// ---------------------------------------------------------------- kurulum ekranı
-function randomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(16));
-  return [0, 1, 2, 3].map(g => [0, 1, 2, 3].map(i => chars[r[g * 4 + i] % chars.length]).join('')).join('-');
 }
-function setupValid() {
-  const ok = normalize($('#setupCode').value).length >= 12;
-  $('#codeError').hidden = ok || !$('#setupCode').value;
-  $('#startBtn').disabled = !ok || !$('#setupName').value.trim();
-}
-$('#setupName').oninput = setupValid; $('#setupCode').oninput = setupValid;
-$('#genCode').onclick = () => { $('#setupCode').value = randomCode(); setupValid(); };
-$('#copyCode').onclick = () => { const v = $('#setupCode').value; if (v) navigator.clipboard?.writeText(v).then(() => toast('Kopyalandı')).catch(() => {}); };
-$('#startBtn').onclick = async () => {
-  const btn = $('#startBtn'); btn.disabled = true; btn.textContent = 'Anahtar oluşturuluyor…';
-  const code = $('#setupCode').value.trim().toUpperCase();
-  try {
-    const r = await deriveRoom(code);
-    await db.set('room', r);
-    Object.assign(room, r);
-    S.config = { myName: $('#setupName').value.trim(), code, server: 'https://ntfy.sh', deviceId: uuid(), turnURL: '', turnUser: '', turnPass: '', showPresence: true, readReceipts: true, notify: false };
-    await saveConfig();
-    showChat(); startRelay();
-  } catch { toast('Bu tarayıcı gerekli şifrelemeyi desteklemiyor'); btn.disabled = false; btn.textContent = 'Başla'; }
-};
 
-// ---------------------------------------------------------------- yaşam döngüsü
-function showChat() { $('#setup').hidden = true; $('#chat').hidden = false; renderHeader(); render(true); }
-document.addEventListener('visibilitychange', () => {
-  S.active = !document.hidden;
-  if (!S.config) return;
-  if (S.active) { notifyCount = 0; document.title = 'Pikku'; S.relay?.reconnect(); sendPresence(true, true); scheduleRead(); }
-  else { sendPresence(false, true); S.peerTyping = false; }
-});
+export const supported = () => !!(window.crypto?.subtle && window.CompressionStream && window.indexedDB);
 
-(async function boot() {
+export async function init() {
   applyTheme();
-  if (!window.crypto?.subtle || !window.CompressionStream) {
-    $('#setup').hidden = false; toast('Tarayıcın çok eski. Güncel Safari, Chrome veya Firefox kullan.', 10000); return;
-  }
+  if (!supported()) return;
   await vault.init();
   const cfg = await vault.getJSON('config'), r = await db.get('room');
   if (cfg && r?.key) {
@@ -1090,13 +849,22 @@ document.addEventListener('visibilitychange', () => {
       if (m.mediaState === 'uploading' || m.mediaState === 'downloading') m.mediaState = 'failed';
       return m;
     });
-    showChat(); startRelay();
-  } else {
-    $('#setup').hidden = false; setupValid();
+    startRelay();
   }
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-})();
-
-
-
+  S.ready = true; emit();
 }
+
+document.addEventListener('visibilitychange', () => {
+  S.active = !document.hidden;
+  if (!S.config) return;
+  if (S.active) { notifyCount = 0; document.title = 'Pikku'; S.relay?.reconnect(); sendPresence(true, true); scheduleRead(); }
+  else { sendPresence(false, true); S.peerTyping = false; }
+  emit();
+});
+
+export {
+  S, Call, WALLS, ACCENTS, TTL_OPTIONS, MAX_LEN, css, toHex, fromHex, paintWall, normalize, uuid, nowS, durText,
+  timeFmt, dayFmt, sameDay, isToday, isYesterday, ttlLabel, displayPeer, peerStatus, byId, mediaURL,
+  sendText, editText, retry, sendImage, sendVideo, deleteForMe, deleteForAll, clearLocal, clearForAll, setTTL,
+  userTyping, scheduleRead, room, deriveRoom
+};

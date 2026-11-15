@@ -34,10 +34,10 @@ App Store gerekmez; .ipa dosyası olarak telefona yüklenir.
 - Yazı boyutu
 
 ## Web sürümü
-`docs/` klasöründe tarayıcıda çalışan Pikku var; iPhone uygulamasıyla aynı kodu ve şifrelemeyi kullanır, yani biri web'den diğeri iPhone'dan yazışabilir.
-- Yayınlamak için: GitHub'da repo → **Settings → Pages** → Source: **Deploy from a branch**, Branch: **main**, klasör: **/docs** → Save. Birkaç dakika sonra adres `https://KULLANICI-ADIN.github.io/Pikku/` olur.
+`docs/` klasöründe tarayıcıda çalışan Pikku var (React + Astryx tasarım sistemi, Apple tarzı sade arayüz). iPhone uygulamasıyla aynı kodu ve şifrelemeyi kullanır; biri web'den diğeri iPhone'dan yazışabilir.
+- Kaynak kod `web/` klasöründe. Değiştirdikten sonra `cd web && npm install && npm run build` komutu siteyi yeniden `docs/` içine üretir.
+- Yayın: GitHub'da repo → **Settings → Pages** → Source: **Deploy from a branch**, Branch: **main**, klasör: **/docs**.
 - iPhone'da Safari ile açıp Paylaş → **Ana Ekrana Ekle** dersen uygulama gibi tam ekran açılır.
-- Mac/PC'de Chrome, Safari, Edge, Firefox'un güncel sürümleriyle çalışır. Sekme açıkken masaüstü bildirimi gösterebilir.
 
 ## 1) IPA dosyasını üret (Mac gerekmez)
 1. GitHub'da yeni bir repo aç (public olabilir; kodda gizli bilgi yok).
