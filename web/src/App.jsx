@@ -337,6 +337,16 @@ function SwipeToReply({ onReply, children, ...rest }) {
   );
 }
 
+// Yalnızca 1–3 emojiden oluşan mesaj: Telegram gibi balonsuz ve büyük gösterilir
+const EMOJI = /(?:\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})*(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})*)*)/gu;
+function emojiOnly(text) {
+  const t = (text || '').replace(/\s+/g, '');
+  if (!t || t.length > 40) return 0;
+  const found = t.match(EMOJI);
+  if (!found || found.join('') !== t) return 0;
+  return found.length <= 3 ? found.length : 0;
+}
+
 function MessageRow({ m, group, onReply, onEdit, onOpen, onDelete }) {
   const time = core.timeFmt.format(new Date(m.date * 1000));
   const items = [
@@ -360,7 +370,8 @@ function MessageRow({ m, group, onReply, onEdit, onOpen, onDelete }) {
       {ticks}
     </span>
   );
-  const tail = group === undefined || group === 'last';
+  const big = !m.media && !m.replyTo ? emojiOnly(m.text) : 0;
+  const tail = !big && (group === undefined || group === 'last');
   const click = () => {
     if (m.status === 'failed' || m.mediaState === 'failed') core.retry(m);
   };
@@ -369,13 +380,15 @@ function MessageRow({ m, group, onReply, onEdit, onOpen, onDelete }) {
     <ContextMenu items={items} presentation="adaptive" label="Mesaj işlemleri" menuWidth="210px">
       <SwipeToReply onReply={() => onReply(m)}>
       <ChatMessage sender={m.mine ? 'user' : 'assistant'}>
-        <ChatMessageBubble group={group} variant={m.media ? 'ghost' : 'filled'} onClick={click}
-          className={(m.media ? 'pk-media-bubble' : '') + (tail && !m.media ? ' pk-tail' : '')}>
+        <ChatMessageBubble group={group} variant={m.media || big ? 'ghost' : 'filled'} onClick={click}
+          className={(m.media ? 'pk-media-bubble' : '') + (big ? ' pk-emoji pk-emoji-' + big : '') + (tail && !m.media ? ' pk-tail' : '')}>
           <span id={'pk-' + m.id} className="pk-anchor" />
           {m.replyTo && <Quote m={m} />}
           {m.media
             ? <div className="pk-media-wrap"><MediaThumb m={m} onOpen={onOpen} />{meta}</div>
-            : <span className="pk-text">{m.text}{meta}</span>}
+            : big
+              ? <span className="pk-text"><span className="pk-emoji-glyphs" role="img" aria-label={m.text}>{m.text.replace(/\s+/g, '')}</span>{meta}</span>
+              : <span className="pk-text">{m.text}{meta}</span>}
         </ChatMessageBubble>
       </ChatMessage>
       </SwipeToReply>

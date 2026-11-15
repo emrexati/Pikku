@@ -5,6 +5,18 @@ import './styles.css';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 
+// iOS Safari klavye açılınca sayfayı yukarı kaydırır ve üst çubuk ekrandan çıkar.
+// Uygulamayı görünen alana (visualViewport) oturtuyoruz: klavye açıkken de başlık yerinde kalır.
+if (window.visualViewport) {
+  const vv = window.visualViewport, root = document.documentElement;
+  const fit = () => {
+    root.style.setProperty('--vvh', vv.height + 'px');
+    root.style.setProperty('--vvt', vv.offsetTop + 'px');
+    if (vv.offsetTop > 0 && document.activeElement?.closest?.('.pk-composer')) window.scrollTo(0, 0);
+  };
+  vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); fit();
+}
+
 // iOS Safari'de iki parmakla ve çift dokunarak yakınlaştırmayı engelle
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
 let lastTouch = 0;
