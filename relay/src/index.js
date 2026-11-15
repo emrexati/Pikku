@@ -20,6 +20,7 @@ export default {
     const parts = url.pathname.split('/').filter(Boolean);
     if (parts.length === 0) return new Response('Pikku aktarma sunucusu çalışıyor.\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS } });
     if (parts[0] === 'v1' && parts[1] === 'health') return json({ healthy: true });
+    if (parts[0] === 'turn' && parts.length === 1) return turn(req, env);
     const topic = parts[0];
     if (!TOPIC.test(topic)) return json({ error: 'bad topic' }, 400);
     const ws = parts[1] === 'ws';
@@ -29,6 +30,29 @@ export default {
     return env.ROOMS.get(env.ROOMS.idFromName(topic)).fetch(req);
   }
 };
+
+// Görüntülü/sesli arama için kısa ömürlü TURN bilgisi (Cloudflare Realtime TURN).
+// İki cihaz arasında doğrudan yol bulunamadığında görüşme bu sunucu üzerinden aktarılır.
+// Anahtarlar Worker ayarlarında gizli değişken olarak durur: TURN_KEY_ID, TURN_KEY_API_TOKEN
+const ALLOWED_ORIGINS = [/^https:\/\/emrexati\.github\.io$/, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
+let turnCache = null;
+async function turn(req, env) {
+  const origin = req.headers.get('Origin') || '';
+  if (origin && !ALLOWED_ORIGINS.some(r => r.test(origin))) return json({ error: 'forbidden' }, 403);
+  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return json({ iceServers: [], configured: false });
+  const now = Date.now();
+  if (!turnCache || turnCache.until < now + 30 * 60e3) {
+    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+      method: 'POST', headers: { Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ttl: 6 * 3600 })
+    });
+    if (!r.ok) return json({ iceServers: [], error: 'turn ' + r.status });
+    const o = await r.json();
+    // Tarayıcıların yavaşladığı 53 numaralı bağlantı noktasını çıkar
+    const servers = (o.iceServers || []).map(s => ({ ...s, urls: [].concat(s.urls).filter(u => !/:53(\?|$)/.test(u)) })).filter(s => s.urls.length);
+    turnCache = { until: now + 6 * 3600e3, iceServers: servers };
+  }
+  return json({ iceServers: turnCache.iceServers, expires: Math.floor(turnCache.until / 1000) });
+}
 
 export class Room extends DurableObject {
   constructor(ctx, env) {

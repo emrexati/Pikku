@@ -636,6 +636,8 @@ const Direct = {
   async start() {
     this.close(true);
     const sid = this.sid = uuid(); this.startedAt = Date.now();
+    await Turn.load();
+    if (this.sid !== sid) return;
     const pc = this.pc = new RTCPeerConnection({ iceServers: Call.iceServers() });
     this.watch(pc, sid);
     this.attach(pc.createDataChannel('pikku', { ordered: true }), sid);
@@ -653,6 +655,8 @@ const Direct = {
       if (this.caller() && this.pc && !this.open) return; // iki taraf aynı anda denerse küçük kimlikli taraf kazanır
       this.close(true);
       const sid = this.sid = env.callId; this.startedAt = Date.now();
+      await Turn.load();
+      if (this.sid !== sid) return;
       const pc = this.pc = new RTCPeerConnection({ iceServers: Call.iceServers() });
       this.watch(pc, sid);
       pc.ondatachannel = ev => this.attach(ev.channel, sid);
@@ -733,6 +737,21 @@ const Direct = {
     try { this.send(await room.seal(makeEnv('presence', on ? 'on' : 'off'))); } catch {}
   }
 };
+// Pikku sunucusundan kısa ömürlü TURN bilgisi: ağlar arası doğrudan yol yoksa görüşme bunun üzerinden akar
+const Turn = {
+  servers: [], until: 0, pending: null,
+  load() {
+    if (this.servers.length && Date.now() / 1000 < this.until - 600) return Promise.resolve();
+    if (this.pending) return this.pending;
+    this.pending = Promise.race([
+      fetch(PIKKU_SERVER + '/turn', { referrerPolicy: 'no-referrer' }).then(r => r.json()).then(o => {
+        if (Array.isArray(o.iceServers) && o.iceServers.length) { this.servers = o.iceServers; this.until = o.expires || Date.now() / 1000 + 3600; }
+      }).catch(() => {}),
+      sleep(3000)
+    ]).finally(() => { this.pending = null; });
+    return this.pending;
+  }
+};
 function gatherIce(pc) {
   if (pc.iceGatheringState === 'complete') return Promise.resolve();
   return new Promise(res => {
@@ -748,9 +767,10 @@ const Call = {
   state: 'idle', video: false, id: '', pc: null, local: null, pendingOffer: null, muted: false, camOff: false, facing: 'user',
   startedAt: 0, reconnecting: false, timeout: null, tick: null, ring: null,
   iceServers() {
-    const s = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+    const s = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
     const t = (S.config?.turnURL || '').trim();
     if (t) s.push({ urls: [t], username: S.config.turnUser, credential: S.config.turnPass });
+    if (Turn.servers.length) s.push(...Turn.servers);
     return s;
   },
   async signal(kind, body, id) {
@@ -827,7 +847,9 @@ const Call = {
     this.cleanup();
   },
   async makePeer() {
+    const turnReady = Turn.load();
     this.local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: this.video ? { facingMode: this.facing, width: { ideal: 1280 }, height: { ideal: 720 } } : false });
+    await turnReady;
     const pc = new RTCPeerConnection({ iceServers: this.iceServers(), bundlePolicy: 'max-bundle' });
     this.pc = pc;
     for (const t of this.local.getTracks()) pc.addTrack(t, this.local);
