@@ -63,6 +63,9 @@ function Unsupported() {
 }
 
 // ---------------------------------------------------------------- kurulum
+// Kodu yazarken 4'lü gruplara ayırır: K7QM-2XHP-R9TA-W4NE
+const formatCode = v => (v.toUpperCase().replace(/[^\p{L}\p{N}]/gu, '').slice(0, 32).match(/.{1,4}/gu) || []).join('-');
+
 function Setup() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -82,7 +85,7 @@ function Setup() {
         <div className="pk-form">
           <TextInput label="Adın" value={name} onChange={setName} placeholder="Örn. Emre" autoComplete="nickname" width="100%" size="lg" />
           <TextInput
-            label="Eşleşme kodu" value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX-XXXX" width="100%" size="lg"
+            label="Eşleşme kodu" value={code} onChange={v => setCode(formatCode(v))} placeholder="XXXX-XXXX-XXXX-XXXX" width="100%" size="lg"
             autoCapitalize="characters" hasAutoCorrect={false} hasSpellCheck={false} controlClassName="pk-mono"
             status={code && !valid ? { type: 'error', message: 'Kod en az 12 harf veya rakam olmalı' } : undefined}
             description="Biriniz kod üretip diğerine güvenli bir yoldan iletsin; ikiniz de aynı kodu girin."
