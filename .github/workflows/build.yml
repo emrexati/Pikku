@@ -5,6 +5,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'web/**'
+      - 'relay/**'
   workflow_dispatch:
 
 jobs:

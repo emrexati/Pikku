@@ -1,0 +1,13 @@
+# Pikku aktarma sunucusu — Cloudflare Workers (ücretsiz plan)
+name = "pikku-relay"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

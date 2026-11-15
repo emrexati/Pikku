@@ -118,7 +118,7 @@ const room = {
 class Relay {
   constructor(server, topic, since) { this.server = server.replace(/\/+$/, ''); this.topic = topic; this.since = since; this.ws = null; this.stopped = true; this.retry = 1; this.last = Date.now(); this.onMessage = null; this.onState = null; }
   start() { this.stopped = false; this.connect(); clearInterval(this.dog); this.dog = setInterval(() => { if (!this.stopped && Date.now() - this.last > 75000) { this.onState?.(false); this.reconnect(); } }, 20000); }
-  stop() { this.stopped = true; clearInterval(this.dog); if (this.ws) { this.ws.onclose = null; this.ws.close(); } this.ws = null; }
+  stop() { this.stopped = true; clearInterval(this.dog); clearInterval(this.pinger); if (this.ws) { this.ws.onclose = null; this.ws.close(); } this.ws = null; }
   reconnect() { if (this.stopped) return; if (this.ws) { this.ws.onclose = null; this.ws.close(); } this.ws = null; this.retry = 1; this.connect(); }
   connect() {
     if (this.stopped) return;
@@ -130,7 +130,13 @@ class Relay {
       if (ws !== this.ws) return;
       this.last = Date.now();
       let o; try { o = JSON.parse(ev.data); } catch { return; }
-      if (o.event === 'open' || o.event === 'keepalive') { this.retry = 1; this.onState?.(true); return; }
+      if (o.event === 'open' || o.event === 'keepalive') {
+        this.retry = 1; this.onState?.(true);
+        // Pikku sunucusu (Cloudflare) uyuyabilen bağlantı kullanır: canlı tutmak için ücretsiz ping/pong
+        if (o.server === 'pikku' && !this.pikku) { this.pikku = true; }
+        if (this.pikku) { clearInterval(this.pinger); this.pinger = setInterval(() => { try { if (ws === this.ws && ws.readyState === 1) ws.send('ping'); } catch {} }, 25000); }
+        return;
+      }
       if (o.event !== 'message' || !o.id || typeof o.message !== 'string') return;
       this.since = o.id; this.onState?.(true); this.onMessage?.(o.id, o.message);
     };
@@ -272,7 +278,7 @@ const ttlLabel = v => (TTL_OPTIONS.find(o => o[0] === v) || [0, `${v} sn`])[1];
 const MAX_LEN = 1500, MAX_MEDIA = 14500000;
 
 const S = {
-  config: null, messages: [], connected: false, relay: null,
+  config: null, messages: [], connected: false, relay: null, relays: [], peerDevice: LS.get('peerDevice') || '',
   peerName: LS.get('peerName') || '', peerOnline: false, peerLastSeen: Number(LS.get('peerLastSeen')) || 0, peerTyping: false,
   ttl: Number(LS.get('ttl')) || 0, seen: new Set(), active: !document.hidden,
   lastTypingSent: 0, lastPresenceSent: 0, lastPeerPing: 0, lastReadSentTs: Number(LS.get('lastReadSentTs')) || 0,
@@ -290,19 +296,21 @@ function makeEnv(kind, body = '', id = uuid(), ts = nowS()) {
   return { id, from: S.config.deviceId, name: S.config.myName, kind, body, ts };
 }
 async function post(env, cache = true, keepalive = false) {
-  if (!room.key || !S.relay) return false;
+  if (!room.key || (!S.relay && !Direct.open)) return false;
   try {
     let e = env, sealed = await room.seal(e);
     if (sealed.length > 3900 && e.media?.thumb) { e = { ...e, media: { ...e.media } }; delete e.media.thumb; sealed = await room.seal(e); }
     if (sealed.length > 4000) return false;
+    if (!e.kind.startsWith('p2p') && Direct.send(sealed)) return true;
     return await viaRelays(r => r.publish(sealed, cache, keepalive));
   } catch { return false; }
 }
 // Önce ana sunucu, olmazsa (kota dolu ya da erişilemiyor) yedek sunucu denenir.
 // İki taraf da ikisini birden dinlediği için mesaj hangisinden giderse gitsin ulaşır.
-async function viaRelays(fn) {
+async function viaRelays(fn, upload = false) {
   const limited = S.primaryLimited && Date.now() - S.primaryLimited < 600000;
-  const list = (limited ? [S.backup, S.relay] : [S.relay, S.backup]).filter(Boolean);
+  const all = S.relays.filter(r => !upload || !r.pikku);
+  const list = limited ? [...all.slice(1), all[0]].filter(Boolean) : all;
   let err;
   for (const r of list) {
     try { const v = await fn(r); if (r === S.relay) S.primaryLimited = 0; return v ?? true; }
@@ -411,7 +419,7 @@ async function upload(id) {
   try {
     const raw = await vault.getBytes('media:' + id); if (!raw) throw new Error('missing');
     const sealedRaw = await room.sealData(raw);
-    const url = await viaRelays(r => r.upload(sealedRaw, room.mediaTopic));
+    const url = await viaRelays(r => r.upload(sealedRaw, room.mediaTopic), true);
     const mm = byId(id); if (!mm) return;
     mm.media.url = url; mm.mediaState = 'ready'; save(); emit(); deliver(mm);
   } catch (e) {
@@ -476,13 +484,14 @@ function appendSystem(text) {
 
 // ---------------------------------------------------------------- çevrimiçi, yazıyor, okundu
 function userTyping() {
-  if (!S.config?.showPresence || Date.now() - S.lastTypingSent < 8000) return;
+  if (!S.config?.showPresence || Date.now() - S.lastTypingSent < (Direct.open ? 3000 : 8000)) return;
   S.lastTypingSent = Date.now(); fire(makeEnv('typing'), false);
 }
 function sendPresence(on, force) {
   if (!S.config || (!S.config.showPresence && on)) return;
+  if (Direct.open) { Direct.sendPresence(on); return; }
   // Mesaj kotasını korumak için: düzenli sinyal 4 dakikada bir, zorunlu olanlar da en sık 45 saniyede bir
-  if (on && Date.now() - S.lastPresenceSent < (force ? 45000 : 240000)) return;
+  if (on && Date.now() - S.lastPresenceSent < (force === 'reply' ? 8000 : force ? 45000 : 240000)) return;
   if (!on && !S.lastPresenceSent) return;
   S.lastPresenceSent = on ? Date.now() : 0;
   post(makeEnv('presence', on ? 'on' : 'off'), false, !on);
@@ -525,23 +534,24 @@ setInterval(() => {
 }, 5000);
 
 // ---------------------------------------------------------------- alma
-const BACKUP_SERVER = 'https://ntfy.envs.net';
+const DEFAULT_SERVER = 'https://ntfy.sh', BACKUP_SERVER = 'https://ntfy.envs.net';
+const clean = u => (u || '').trim().replace(/\/+$/, '');
+// Dinlenen sunucular: seçili sunucu + ntfy.sh + yedek. Mesaj seçili sunucudan gider, olmazsa sıradakinden.
+// İki taraf da hepsini dinlediği için biri farklı sunucu seçse bile mesajlar kaybolmaz.
+function relayServers() { return [...new Set([clean(S.config.server) || DEFAULT_SERVER, DEFAULT_SERVER, BACKUP_SERVER])]; }
+function sinceKey(server) { return server === DEFAULT_SERVER ? 'since-' + room.topic : server === BACKUP_SERVER ? 'since2-' + room.topic : 'since:' + server + ':' + room.topic; }
 function startRelay() {
-  S.relay?.stop(); S.backup?.stop(); S.relay = null; S.backup = null; S.connected = false;
+  for (const r of S.relays) r.stop();
+  S.relays = []; S.relay = null; S.backup = null; S.connected = false;
   if (!S.config || !room.key) return;
-  const up = { main: false, backup: false };
-  const onState = which => ok => { const was = S.connected; up[which] = ok; S.connected = up.main || up.backup; if (S.connected && !was) sendPresence(true, true); if (S.connected !== was) emit(); };
-  const primary = (S.config.server || 'https://ntfy.sh').replace(/\/+$/, '');
-  const r = new Relay(primary, room.topic, LS.get('since-' + room.topic) || '12h');
-  r.onState = onState('main');
-  r.onMessage = (id, body) => { LS.set('since-' + room.topic, id); receive(body); };
-  S.relay = r; r.start();
-  if (primary !== BACKUP_SERVER) {
-    const b = new Relay(BACKUP_SERVER, room.topic, LS.get('since2-' + room.topic) || '12h');
-    b.onState = onState('backup');
-    b.onMessage = (id, body) => { LS.set('since2-' + room.topic, id); receive(body); };
-    S.backup = b; b.start();
+  const up = new Map();
+  for (const server of relayServers()) {
+    const r = new Relay(server, room.topic, LS.get(sinceKey(server)) || '12h');
+    r.onState = ok => { const was = S.connected; up.set(server, ok); S.connected = [...up.values()].some(Boolean) || Direct.open; if (S.connected && !was) sendPresence(true, true); if (S.connected !== was) emit(); };
+    r.onMessage = (id, body) => { LS.set(sinceKey(server), id); receive(body); };
+    S.relays.push(r); r.start();
   }
+  S.relay = S.relays[0]; S.backup = S.relays[1] || null;
   emit();
 }
 let notifyCount = 0;
@@ -555,6 +565,7 @@ async function receive(body) {
   const env = await room.open(body);
   if (!env || !S.config || env.from === S.config.deviceId || S.seen.has(env.id)) return;
   S.seen.add(env.id);
+  if (env.from && env.from !== S.peerDevice) { S.peerDevice = env.from; LS.set('peerDevice', env.from); }
   if (env.name && env.name !== S.peerName) { S.peerName = env.name; LS.set('peerName', env.name); }
   const age = nowS() - env.ts;
   switch (env.kind) {
@@ -586,7 +597,7 @@ async function receive(body) {
     }
     case 'presence':
       if (age >= 90) return;
-      if (env.body === 'on') { const was = S.peerOnline; markPeerSeen(); if (!was && S.active) sendPresence(true, true); }
+      if (env.body === 'on') { const was = S.peerOnline; markPeerSeen(); if (!was && S.active) sendPresence(true, 'reply'); Direct.maybeStart(); }
       else { S.peerOnline = false; S.peerTyping = false; S.peerLastSeen = env.ts; LS.set('peerLastSeen', env.ts); }
       break;
     case 'typing':
@@ -596,9 +607,138 @@ async function receive(body) {
       break;
     case 'screenshot': appendSystem(`${displayPeer()} ekran görüntüsü aldı`); break;
     case 'offer': case 'answer': case 'hangup': case 'reject': case 'busy': Call.handle(env); break;
+    case 'p2p-offer': case 'p2p-answer': Direct.handle(env, age); break;
+    case 'relay': {
+      const u = clean(env.body);
+      if (u && /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(u + '/') && u !== clean(S.config.server)) { S.config = { ...S.config, server: u }; await saveConfig(); startRelay(); appendSystem(`${displayPeer()} aktarma sunucusunu değiştirdi`); }
+      break;
+    }
   }
   emit();
 }
+
+// ---------------------------------------------------------------- doğrudan kanal (WebRTC veri kanalı)
+// İki taraf da uygulamadayken telefonlar birbirine doğrudan bağlanır. Çevrimiçi bilgisi, "yazıyor",
+// okundu ve mesajlar bu kanaldan gider; hiçbir sunucunun kotasını harcamaz. Kanal yoksa her şey
+// aktarma sunucusuna düşer. Kanal DTLS ile şifrelidir; üstüne zarflar yine oda anahtarıyla mühürlenir.
+const Direct = {
+  pc: null, ch: null, open: false, sid: '', lastRx: 0, fails: 0, nextTry: 0, timer: null, ping: null, startedAt: 0,
+  caller() { return !!S.peerDevice && !!S.config && S.config.deviceId < S.peerDevice; },
+  maybeStart() {
+    if (!S.config || !room.key || !S.active || this.open || !this.caller() || typeof RTCPeerConnection === 'undefined') return;
+    if (this.pc && Date.now() - this.startedAt < 15000) return;
+    if (Date.now() < this.nextTry) return;
+    this.start();
+  },
+  async start() {
+    this.close(true);
+    const sid = this.sid = uuid(); this.startedAt = Date.now();
+    const pc = this.pc = new RTCPeerConnection({ iceServers: Call.iceServers() });
+    this.watch(pc, sid);
+    this.attach(pc.createDataChannel('pikku', { ordered: true }), sid);
+    try {
+      await pc.setLocalDescription(await pc.createOffer());
+      await gatherIce(pc);
+      if (this.sid !== sid) return;
+      const env = makeEnv('p2p-offer', pc.localDescription.sdp); env.callId = sid;
+      if (!(await post(env, false))) this.failed(sid);
+    } catch { this.failed(sid); }
+  },
+  async handle(env, age) {
+    if (age > 30 || !S.config) return;
+    if (env.kind === 'p2p-offer') {
+      if (this.caller() && this.pc && !this.open) return; // iki taraf aynı anda denerse küçük kimlikli taraf kazanır
+      this.close(true);
+      const sid = this.sid = env.callId; this.startedAt = Date.now();
+      const pc = this.pc = new RTCPeerConnection({ iceServers: Call.iceServers() });
+      this.watch(pc, sid);
+      pc.ondatachannel = ev => this.attach(ev.channel, sid);
+      try {
+        await pc.setRemoteDescription({ type: 'offer', sdp: env.body });
+        await pc.setLocalDescription(await pc.createAnswer());
+        await gatherIce(pc);
+        if (this.sid !== sid) return;
+        const ans = makeEnv('p2p-answer', pc.localDescription.sdp); ans.callId = sid;
+        await post(ans, false);
+      } catch { this.failed(sid); }
+    } else if (env.kind === 'p2p-answer' && env.callId === this.sid && this.pc && !this.pc.currentRemoteDescription) {
+      try { await this.pc.setRemoteDescription({ type: 'answer', sdp: env.body }); } catch { this.failed(this.sid); }
+    }
+  },
+  watch(pc, sid) {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => { if (this.sid === sid && !this.open) this.failed(sid); }, 15000);
+    pc.onconnectionstatechange = () => { if (this.sid === sid && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) this.failed(sid); };
+  },
+  attach(ch, sid) {
+    this.ch = ch;
+    ch.onopen = () => {
+      if (this.sid !== sid) return;
+      this.open = true; this.fails = 0; this.lastRx = Date.now(); clearTimeout(this.timer); S.connected = true;
+      this.sendPresence(S.active);
+      clearInterval(this.ping);
+      this.ping = setInterval(() => {
+        if (!this.open) return;
+        if (Date.now() - this.lastRx > 45000) return this.failed(sid);
+        try { ch.send('ping'); } catch {}
+        if (S.active) this.sendPresence(true);
+      }, 15000);
+      flushPending();
+      emit();
+    };
+    ch.onmessage = ev => {
+      if (this.sid !== sid || typeof ev.data !== 'string') return;
+      this.lastRx = Date.now();
+      if (ev.data === 'ping') { try { ch.send('pong'); } catch {} return; }
+      if (ev.data === 'pong') return;
+      receive(ev.data);
+    };
+    ch.onclose = () => { if (this.sid === sid) this.failed(sid); };
+  },
+  failed(sid) {
+    if (sid && sid !== this.sid) return;
+    const wasOpen = this.open;
+    this.close(true);
+    if (wasOpen) { S.peerOnline = false; S.peerTyping = false; S.peerLastSeen = nowS(); LS.set('peerLastSeen', S.peerLastSeen); }
+    else this.fails++;
+    // Kurulamazsa giderek seyrekleşen denemeler (aktarma kotasını korumak için): 30 sn, 1, 2, 4 … en çok 10 dk
+    this.nextTry = Date.now() + Math.min(600000, 30000 * 2 ** Math.max(0, this.fails - 1));
+    S.connected = S.relays.some(r => r.ws && r.ws.readyState === 1);
+    emit();
+    // Karşı taraf hâlâ uygulamadaysa (ağ kısa süre koptuysa) haber ver; o da yanıt verince kanal yeniden kurulur.
+    // Karşı taraf yoksa boşuna deneme yapılmaz; kota harcanmaz.
+    if (wasOpen && S.active) setTimeout(() => sendPresence(true, 'reply'), 1500);
+  },
+  close(silent) {
+    clearTimeout(this.timer); clearInterval(this.ping);
+    const pc = this.pc, ch = this.ch;
+    this.pc = null; this.ch = null; this.open = false;
+    if (!silent) this.sid = '';
+    try { ch && (ch.onclose = null, ch.close()); } catch {}
+    try { pc && pc.close(); } catch {}
+  },
+  send(sealed) {
+    const ch = this.ch;
+    if (!this.open || !ch || ch.readyState !== 'open' || ch.bufferedAmount > 1 << 20) return false;
+    try { ch.send(sealed); return true; } catch { return false; }
+  },
+  lastPresence: 0,
+  async sendPresence(on) {
+    if (!this.open || !S.config || (on && !S.config.showPresence)) return;
+    if (on && Date.now() - this.lastPresence < 10000) return;
+    this.lastPresence = on ? Date.now() : 0;
+    try { this.send(await room.seal(makeEnv('presence', on ? 'on' : 'off'))); } catch {}
+  }
+};
+function gatherIce(pc) {
+  if (pc.iceGatheringState === 'complete') return Promise.resolve();
+  return new Promise(res => {
+    const t = setTimeout(res, 4000);
+    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+  });
+}
+// Kanal açılınca, bağlantı yokken gönderilemeyen mesajları yeniden dene
+function flushPending() { for (const m of S.messages) if (m.mine && m.status === 'failed' && (!m.media || m.media.url)) { setStatus(m.id, 'sending'); deliver(m); } }
 
 // ---------------------------------------------------------------- arama (WebRTC)
 const Call = {
@@ -794,7 +934,12 @@ export async function saveSettings(patch) {
   const serverChanged = n.server !== S.config.server, presenceOff = S.config.showPresence && !n.showPresence;
   if (presenceOff) sendPresence(false, true);
   S.config = n; await saveConfig();
-  if (serverChanged) startRelay();
+  if (serverChanged) {
+    // Karşı tarafa yeni sunucuyu (şifreli) bildir; eski ve yeni sunucuların hepsinden gönder ki kesin ulaşsın
+    const env = makeEnv('relay', n.server);
+    try { const sealed = await room.seal(env); if (!Direct.send(sealed)) await Promise.allSettled(S.relays.map(r => r.publish(sealed, true))); } catch {}
+    startRelay();
+  }
   if (n.showPresence) sendPresence(true, true);
   emit();
 }
@@ -807,7 +952,7 @@ export async function requestNotifications() {
 }
 
 export async function resetPairing() {
-  sendPresence(false, true); S.relay?.stop(); S.relay = null; S.backup?.stop(); S.backup = null;
+  sendPresence(false, true); Direct.close(); for (const r of S.relays) r.stop(); S.relays = []; S.relay = null; S.backup = null;
   await clearLocal(); await db.del('config'); await db.del('room');
   for (const k of ['peerName', 'peerLastSeen', 'ttl', 'lastReadSentTs']) LS.del(k);
   location.reload();
@@ -838,13 +983,13 @@ document.addEventListener('visibilitychange', () => {
   S.active = !document.hidden;
   if (!S.config) return;
   clearTimeout(offTimer);
-  if (S.active) { notifyCount = 0; document.title = 'Pikku'; S.relay?.reconnect(); S.backup?.reconnect(); sendPresence(true, true); scheduleRead(); }
-  else { S.peerTyping = false; offTimer = setTimeout(() => { if (document.hidden) sendPresence(false, true); }, 20000); }
+  if (S.active) { notifyCount = 0; document.title = 'Pikku'; for (const r of S.relays) r.reconnect(); sendPresence(true, true); scheduleRead(); }
+  else { S.peerTyping = false; Direct.sendPresence(false); offTimer = setTimeout(() => { if (document.hidden) sendPresence(false, true); }, 20000); }
   emit();
 });
 
 export {
-  S, Call, WALLS, ACCENTS, TTL_OPTIONS, MAX_LEN, css, toHex, fromHex, paintWall, normalize, uuid, nowS, durText,
+  S, Call, Direct, WALLS, ACCENTS, TTL_OPTIONS, MAX_LEN, css, toHex, fromHex, paintWall, normalize, uuid, nowS, durText,
   timeFmt, dayFmt, sameDay, isToday, isYesterday, ttlLabel, displayPeer, peerStatus, byId, mediaURL,
   sendText, editText, retry, sendImage, sendVideo, deleteForMe, deleteForAll, clearLocal, clearForAll, setTTL,
   userTyping, scheduleRead, room, deriveRoom
